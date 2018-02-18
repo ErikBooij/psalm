@@ -1,13 +1,13 @@
 <?php
 declare(strict_types = 1);
 
-namespace LanguageServer\Server;
+namespace Psalm\LanguageServer\Server;
 
 use PhpParser\PrettyPrinter\Standard as PrettyPrinter;
 use PhpParser\{Node, NodeTraverser};
-use LanguageServer\{LanguageClient, PhpDocumentLoader, PhpDocument, DefinitionResolver, CompletionProvider};
-use LanguageServer\NodeVisitor\VariableReferencesCollector;
-use LanguageServer\Protocol\{
+use Psalm\LanguageServer\{LanguageClient, PhpDocumentLoader, PhpDocument, DefinitionResolver, CompletionProvider};
+use Psalm\LanguageServer\NodeVisitor\VariableReferencesCollector;
+use Psalm\LanguageServer\Protocol\{
     SymbolLocationInformation,
     SymbolDescriptor,
     TextDocumentItem,
@@ -26,11 +26,11 @@ use LanguageServer\Protocol\{
     CompletionItem,
     CompletionItemKind
 };
-use LanguageServer\Index\ReadableIndex;
+use Psalm\LanguageServer\Index\ReadableIndex;
 use Sabre\Event\Promise;
 use Sabre\Uri;
 use function Sabre\Event\coroutine;
-use function LanguageServer\{waitForEvent, isVendored};
+use function Psalm\LanguageServer\{waitForEvent, isVendored};
 
 /**
  * Provides method handlers for all textDocument/* methods
