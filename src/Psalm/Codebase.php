@@ -121,6 +121,12 @@ class Codebase
     public $populator;
 
     /**
+     * @var bool
+     */
+    public $server_mode = false;
+
+    /**
+     * @param bool $collect_references
      * @param bool $debug_output
      */
     public function __construct(
@@ -172,6 +178,14 @@ class Codebase
             $this->classlikes,
             $debug_output
         );
+    }
+
+    /**
+     * @return void
+     */
+    public function enterServerMode()
+    {
+        $this->server_mode = true;
     }
 
     /**
@@ -238,7 +252,8 @@ class Codebase
     {
         return $this->statements_provider->getStatementsForFile(
             $file_path,
-            $this->debug_output
+            $this->debug_output,
+            $this->server_mode
         );
     }
 

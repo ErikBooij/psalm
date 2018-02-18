@@ -2,6 +2,8 @@
 namespace Psalm\Provider;
 
 use PhpParser;
+use Psalm\Checker\ProjectChecker;
+use Psalm\LanguageServer\NodeVisitor\{ColumnCalculator, ReferencesAdder};
 
 class StatementsProvider
 {
@@ -44,14 +46,15 @@ class StatementsProvider
     /**
      * @param  string  $file_path
      * @param  bool    $debug_output
+     * @param  bool    $server_mode
      *
      * @return array<int, \PhpParser\Node\Stmt>
      */
-    public function getStatementsForFile($file_path, $debug_output = false)
+    public function getStatementsForFile($file_path, $debug_output = false, $server_mode = false)
     {
         $from_cache = false;
 
-        $version = (string) PHP_PARSER_VERSION . $this->this_modified_time;
+        $version = (string) PHP_PARSER_VERSION . ($server_mode ? 'server' : '') . $this->this_modified_time;
 
         $file_contents = $this->file_provider->getContents($file_path);
         $modified_time = $this->file_provider->getModifiedTime($file_path);
@@ -70,7 +73,7 @@ class StatementsProvider
                 echo 'Parsing ' . $file_path . "\n";
             }
 
-            $stmts = self::parseStatements($file_contents);
+            $stmts = self::parseStatements($file_contents, $server_mode);
             $this->file_storage_cache_provider->removeCacheForFile($file_path);
         } else {
             $from_cache = true;
@@ -86,18 +89,23 @@ class StatementsProvider
     }
 
     /**
-     * @param  string   $file_contents
+     * @param  string  $file_contents
+     * @param  bool    $server_mode
      *
      * @return array<int, \PhpParser\Node\Stmt>
      */
-    public static function parseStatements($file_contents)
+    private static function parseStatements($file_contents, $server_mode)
     {
         if (!self::$parser) {
-            $lexer = new PhpParser\Lexer([
-                'usedAttributes' => [
-                    'comments', 'startLine', 'startFilePos', 'endFilePos',
-                ],
-            ]);
+            $attributes = [
+                'comments', 'startLine', 'startFilePos', 'endFilePos',
+            ];
+
+            if ($server_mode) {
+                $attributes[] = 'endLine';
+            }
+
+            $lexer = PhpParser\Lexer([ 'usedAttributes' => $attributes ]);
 
             self::$parser = (new PhpParser\ParserFactory())->create(PhpParser\ParserFactory::PREFER_PHP7, $lexer);
         }
@@ -113,6 +121,30 @@ class StatementsProvider
             }
         }
 
+        if ($server_mode) {
+            $traverser = new PhpParser\NodeTraverser;
+
+            // Add column attributes to nodes
+            $traverser->addVisitor(new ColumnCalculator($file_contents));
+
+            $traverser->traverse($stmts);
+        }
+
         return $stmts;
+    }
+
+    /**
+     * Returns the node at a specified position
+     * @param array<PhpParser\Node> $stmts
+     * @param \Psalm\LanguageServer\Protocol\Position $position
+     * @return PhpParser\Node|null
+     */
+    public static function getNodeAtPosition(array $stmts, \Psalm\LanguageServer\Protocol\Position $position)
+    {
+        $traverser = new PhpParser\NodeTraverser;
+        $finder = new \Psalm\LanguageServer\NodeVisitor\NodeAtPositionFinder($position);
+        $traverser->addVisitor($finder);
+        $traverser->traverse($stmts);
+        return $finder->node;
     }
 }

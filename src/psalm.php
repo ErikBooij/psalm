@@ -18,7 +18,7 @@ $options = getopt(
         'help', 'debug', 'debug-by-line', 'config:', 'monochrome', 'show-info:', 'diff',
         'output-format:', 'report:', 'find-dead-code', 'init',
         'find-references-to:', 'root:', 'threads:', 'clear-cache', 'no-cache',
-        'version', 'plugin:', 'stats',
+        'version', 'plugin:', 'stats', 'server',
     ]
 );
 
@@ -112,6 +112,9 @@ Options:
 
     --stats
         Shows a breakdown of Psalm's ability to infer types in the codebase
+
+    --server
+        Start Psalm in server mode
 
 HELP;
 
@@ -345,7 +348,9 @@ foreach ($plugins as $plugin_path) {
 
 $start_time = (float) microtime(true);
 
-if ($paths_to_check === null) {
+if (array_key_exists('server', $options)) {
+    $project_checker->server($current_dir);
+} elseif ($paths_to_check === null) {
     $project_checker->check($current_dir, $is_diff);
 } elseif ($paths_to_check) {
     foreach ($paths_to_check as $path_to_check) {

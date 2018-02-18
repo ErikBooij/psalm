@@ -1,6 +1,7 @@
 <?php
 namespace Psalm\Checker;
 
+use JsonRPC\Server;
 use Psalm\Codebase;
 use Psalm\Config;
 use Psalm\Context;
@@ -227,7 +228,121 @@ class ProjectChecker
     }
 
     /**
-     * @return ProjectChecker
+     * @param  string $base_dir
+     * @param  string $address
+     * @param  int $port
+     * @return void
+     */
+    public function server($base_dir, $address = '127.0.0.1', $port = 12345)
+    {
+        $this->codebase->enterServerMode();
+
+        $cwd = getcwd();
+
+        if (!$cwd) {
+            throw new \InvalidArgumentException('Cannot work with empty cwd');
+        }
+
+        echo 'Gathering project files...' . PHP_EOL;
+
+        foreach ($this->config->getProjectDirectories() as $dir_name) {
+            $this->checkDirWithConfig($dir_name, $this->config);
+        }
+
+        echo 'Scanning files...' . PHP_EOL;
+
+        $this->codebase->scanFiles();
+
+        echo 'Project is ready for querying' . PHP_EOL;
+
+        $this->output_format = self::TYPE_JSON;
+
+        $filetype_checkers = $this->config->getFileTypeCheckers();
+
+        /* Allow the script to hang around waiting for connections. */
+        set_time_limit(0);
+
+        /* Turn on implicit output flushing so we see what we're getting
+         * as it comes in. */
+        ob_implicit_flush();
+
+        if (($sock = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
+            die("socket_create() failed: reason: " . socket_strerror(socket_last_error()) . "\n");
+        }
+
+        if (socket_bind($sock, $address, $port) === false) {
+            die("socket_bind() failed: reason: " . socket_strerror(socket_last_error($sock)) . "\n");
+        }
+
+        if (socket_listen($sock, 5) === false) {
+            die("socket_listen() failed: reason: " . socket_strerror(socket_last_error($sock)) . "\n");
+        }
+
+        do {
+            if (($msgsock = socket_accept($sock)) === false) {
+                echo "socket_accept() failed: reason: " . socket_strerror(socket_last_error($sock)) . "\n";
+                break;
+            }
+            /* Send instructions. */
+            $msg = "\nWelcome to the PHP Test Server. \n" .
+                "To quit, type 'quit'. To shut down the server type 'shutdown'.\n";
+            socket_write($msgsock, $msg, strlen($msg));
+
+            do {
+                if (false === ($buf = socket_read($msgsock, 2048, PHP_NORMAL_READ))) {
+                    echo "socket_read() failed: reason: " . socket_strerror(socket_last_error($msgsock)) . "\n";
+                    break 2;
+                }
+
+                $buf = trim($buf);
+
+                if (!$buf) {
+                    continue;
+                }
+
+                if ($buf === 'quit') {
+                    break;
+                }
+
+                if ($buf === 'shutdown') {
+                    socket_close($msgsock);
+                    break 2;
+                }
+
+                $buf_parts = explode(':', $buf);
+
+                $file_checker = $this->codebase->analyzer->getFileChecker(
+                    $this,
+                    realpath($buf_parts[0]),
+                    $filetype_checkers
+                );
+
+                echo 'Analyzing ' . $file_checker->getFilePath() . PHP_EOL;
+
+                $file_checker->analyze(null, false, true);
+
+                $line_number = (int)$buf_parts[1];
+                $column = (int)$buf_parts[2];
+
+                echo 'Getting node at position ' . $line_number . ':' . $column;
+
+                $node = StatementsProvider::getNodeAtPosition(
+                    $file_checker->getStatements(),
+                    new \Psalm\LanguageServer\Protocol\Position($line_number, $column)
+                );
+
+                /** @psalm-suppress NoInterfaceProperties */
+                $response = (isset($node->inferredType) ? (string)$node->inferredType : 'unknown type') . PHP_EOL;
+
+                socket_write($msgsock, $response, strlen($response));
+                echo "$buf\n";
+            } while (true);
+            socket_close($msgsock);
+        } while (true);
+    }
+
+    /**
+     * @return self
      */
     public static function getInstance()
     {

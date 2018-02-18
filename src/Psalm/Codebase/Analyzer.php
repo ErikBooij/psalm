@@ -90,7 +90,7 @@ class Analyzer
      *
      * @psalm-suppress MixedOperand
      */
-    private function getFileChecker(ProjectChecker $project_checker, $file_path, array $filetype_checkers)
+    public function getFileChecker(ProjectChecker $project_checker, $file_path, array $filetype_checkers)
     {
         $extension = (string)pathinfo($file_path)['extension'];
 

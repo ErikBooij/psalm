@@ -281,6 +281,17 @@ class IssueBuffer
     }
 
     /**
+     * @return array
+     */
+    public static function clear()
+    {
+        $current_data = self::$issues_data;
+        self::$issues_data = [];
+        self::$emitted = [];
+        return $current_data;
+    }
+
+    /**
      * @param  ProjectChecker       $project_checker
      * @param  bool                 $is_full
      * @param  float                $start_time
