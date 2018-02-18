@@ -349,7 +349,7 @@ foreach ($plugins as $plugin_path) {
 $start_time = (float) microtime(true);
 
 if (array_key_exists('server', $options)) {
-    $project_checker->server($current_dir);
+    $project_checker->server($current_dir, null);
 } elseif ($paths_to_check === null) {
     $project_checker->check($current_dir, $is_diff);
 } elseif ($paths_to_check) {

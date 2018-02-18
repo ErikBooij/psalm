@@ -5,6 +5,7 @@ use JsonRPC\Server;
 use Psalm\Codebase;
 use Psalm\Config;
 use Psalm\Context;
+use Psalm\LanguageServer\{LanguageServer, ProtocolStreamReader, ProtocolStreamWriter};
 use Psalm\Provider\ClassLikeStorageCacheProvider;
 use Psalm\Provider\ClassLikeStorageProvider;
 use Psalm\Provider\FileProvider;
@@ -16,6 +17,7 @@ use Psalm\Provider\StatementsProvider;
 use Psalm\Type;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use Sabre\Event\Loop;
 
 class ProjectChecker
 {
@@ -229,11 +231,11 @@ class ProjectChecker
 
     /**
      * @param  string $base_dir
-     * @param  string $address
-     * @param  int $port
+     * @param  string|null $address
+     * @param  bool $server_mode
      * @return void
      */
-    public function server($base_dir, $address = '127.0.0.1', $port = 12345)
+    public function server($base_dir, $address = '127.0.0.1:12345', $server_mode = true)
     {
         $this->codebase->enterServerMode();
 
@@ -259,86 +261,115 @@ class ProjectChecker
 
         $filetype_checkers = $this->config->getFileTypeCheckers();
 
-        /* Allow the script to hang around waiting for connections. */
-        set_time_limit(0);
-
-        /* Turn on implicit output flushing so we see what we're getting
-         * as it comes in. */
-        ob_implicit_flush();
-
-        if (($sock = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
-            die("socket_create() failed: reason: " . socket_strerror(socket_last_error()) . "\n");
-        }
-
-        if (socket_bind($sock, $address, $port) === false) {
-            die("socket_bind() failed: reason: " . socket_strerror(socket_last_error($sock)) . "\n");
-        }
-
-        if (socket_listen($sock, 5) === false) {
-            die("socket_listen() failed: reason: " . socket_strerror(socket_last_error($sock)) . "\n");
-        }
-
-        do {
-            if (($msgsock = socket_accept($sock)) === false) {
-                echo "socket_accept() failed: reason: " . socket_strerror(socket_last_error($sock)) . "\n";
-                break;
+        // Convert all errors to ErrorExceptions
+        set_error_handler(
+            /**
+             * @return void
+             */
+            function (int $severity, string $message, string $file, int $line) {
+                if (!(error_reporting() & $severity)) {
+                    // This error code is not included in error_reporting (can also be caused by the @ operator)
+                    return;
+                }
+                throw new \ErrorException($message, 0, $severity, $file, $line);
             }
-            /* Send instructions. */
-            $msg = "\nWelcome to the PHP Test Server. \n" .
-                "To quit, type 'quit'. To shut down the server type 'shutdown'.\n";
-            socket_write($msgsock, $msg, strlen($msg));
+        );
 
-            do {
-                if (false === ($buf = socket_read($msgsock, 2048, PHP_NORMAL_READ))) {
-                    echo "socket_read() failed: reason: " . socket_strerror(socket_last_error($msgsock)) . "\n";
-                    break 2;
+        // Only write uncaught exceptions to STDERR, not STDOUT
+        set_exception_handler(function (\Throwable $e) {
+            fwrite(STDOUT, (string)$e);
+        });
+
+        @cli_set_process_title('PHP Language Server');
+
+        if (!$server_mode && $address) {
+            // Connect to a TCP server
+            $socket = stream_socket_client('tcp://' . $address, $errno, $errstr);
+            if ($socket === false) {
+                fwrite(STDERR, "Could not connect to language client. Error $errno\n$errstr");
+                exit(1);
+            }
+            stream_set_blocking($socket, false);
+            $ls = new LanguageServer(
+                new ProtocolStreamReader($socket),
+                new ProtocolStreamWriter($socket)
+            );
+            Loop\run();
+        } elseif ($server_mode && $address) {
+            // Run a TCP Server
+            $tcpServer = stream_socket_server('tcp://' . $address, $errno, $errstr);
+            if ($tcpServer === false) {
+                fwrite(STDERR, "Could not listen on $address. Error $errno\n$errstr");
+                exit(1);
+            }
+            fwrite(STDOUT, "Server listening on $address\n");
+            if (!extension_loaded('pcntl')) {
+                fwrite(STDERR, "PCNTL is not available. Only a single connection will be accepted\n");
+            }
+            while ($socket = stream_socket_accept($tcpServer, -1)) {
+                fwrite(STDOUT, "Connection accepted\n");
+                stream_set_blocking($socket, false);
+                if (extension_loaded('pcntl')) {
+                    // If PCNTL is available, fork a child process for the connection
+                    // An exit notification will only terminate the child process
+                    $pid = pcntl_fork();
+                    if ($pid === -1) {
+                        fwrite(STDERR, "Could not fork\n");
+                        exit(1);
+                    }
+
+                    if ($pid === 0) {
+                        // Child process
+                        $reader = new ProtocolStreamReader($socket);
+                        $writer = new ProtocolStreamWriter($socket);
+                        $reader->on('close', function () {
+                            fwrite(STDOUT, "Connection closed\n");
+                        });
+                        $ls = new LanguageServer($reader, $writer);
+                        Loop\run();
+                        // Just for safety
+                        exit(0);
+                    }
+                } else {
+                    // If PCNTL is not available, we only accept one connection.
+                    // An exit notification will terminate the server
+                    $ls = new LanguageServer(
+                        new ProtocolStreamReader($socket),
+                        new ProtocolStreamWriter($socket)
+                    );
+                    Loop\run();
                 }
+            }
+        } else {
+            // Use STDIO
+            stream_set_blocking(STDIN, false);
+            $ls = new LanguageServer(
+                new ProtocolStreamReader(STDIN),
+                new ProtocolStreamWriter(STDOUT)
+            );
+            Loop\run();
+        }
 
-                $buf = trim($buf);
+        /**
+        $file_checker = $this->codebase->analyzer->getFileChecker(
+            $this,
+            realpath($buf_parts[0]),
+            $filetype_checkers
+        );
 
-                if (!$buf) {
-                    continue;
-                }
+        echo 'Analyzing ' . $file_checker->getFilePath() . PHP_EOL;
 
-                if ($buf === 'quit') {
-                    break;
-                }
+        $file_checker->analyze(null, false, true);
 
-                if ($buf === 'shutdown') {
-                    socket_close($msgsock);
-                    break 2;
-                }
+        $line_number = (int)$buf_parts[1];
+        $column = (int)$buf_parts[2];
 
-                $buf_parts = explode(':', $buf);
+        echo 'Getting node at position ' . $line_number . ':' . $column;
 
-                $file_checker = $this->codebase->analyzer->getFileChecker(
-                    $this,
-                    realpath($buf_parts[0]),
-                    $filetype_checkers
-                );
-
-                echo 'Analyzing ' . $file_checker->getFilePath() . PHP_EOL;
-
-                $file_checker->analyze(null, false, true);
-
-                $line_number = (int)$buf_parts[1];
-                $column = (int)$buf_parts[2];
-
-                echo 'Getting node at position ' . $line_number . ':' . $column;
-
-                $node = StatementsProvider::getNodeAtPosition(
-                    $file_checker->getStatements(),
-                    new \Psalm\LanguageServer\Protocol\Position($line_number, $column)
-                );
-
-                /** @psalm-suppress NoInterfaceProperties */
-                $response = (isset($node->inferredType) ? (string)$node->inferredType : 'unknown type') . PHP_EOL;
-
-                socket_write($msgsock, $response, strlen($response));
-                echo "$buf\n";
-            } while (true);
-            socket_close($msgsock);
-        } while (true);
+        $node = StatementsProvider::getNodeAtPosition(
+            $file_checker->getStatements(),
+            new \Psalm\LanguageServer\Protocol\Position($line_number, $column)
+        );*/
     }
 
     /**
