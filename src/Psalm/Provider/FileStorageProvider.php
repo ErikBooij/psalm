@@ -47,6 +47,7 @@ class FileStorageProvider
     public function remove($file_path)
     {
         unset(self::$storage[strtolower($file_path)]);
+        $this->cache->removeCacheForFile(strtolower($file_path));
     }
 
     /**
@@ -66,6 +67,7 @@ class FileStorageProvider
         $cached_value = $this->cache->getLatestFromCache($file_path, $file_contents);
 
         if (!$cached_value) {
+
             return false;
         }
 

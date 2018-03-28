@@ -216,7 +216,7 @@ class Codebase
             }
 
             foreach ($file_storage->classlikes_in_file as $fq_classlike_name) {
-                $this->classlike_storage_provider->remove($fq_classlike_name);
+                $this->classlike_storage_provider->remove($fq_classlike_name, $diff_file_path);
                 $this->classlikes->removeClassLike($fq_classlike_name);
             }
 
@@ -239,6 +239,8 @@ class Codebase
             $this->file_storage_provider->remove($referenced_file_path);
             $this->scanner->removeFile($referenced_file_path);
         }
+
+        error_log(var_export($referenced_files, true));
 
         $this->scanner->addFilesToDeepScan($referenced_files);
         $this->scanner->scanFiles($this->classlikes);

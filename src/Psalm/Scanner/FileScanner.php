@@ -65,8 +65,10 @@ class FileScanner implements FileSource
         if ($debug_output) {
             if ($this->will_analyze) {
                 echo 'Deep scanning ' . $file_storage->file_path . "\n";
+                error_log('Deep scanning ' . $file_storage->file_path);
             } else {
                 echo 'Scanning ' . $file_storage->file_path . "\n";
+                error_log('Scanning ' . $file_storage->file_path);
             }
         }
 

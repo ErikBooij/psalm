@@ -73,7 +73,7 @@ class ClassLikeStorageCacheProvider
         $cached_value = $this->loadFromCache($fq_classlike_name_lc, $file_path);
 
         if (!$cached_value) {
-            throw new \UnexpectedValueException('Should be in cache');
+            throw new \UnexpectedValueException($fq_classlike_name_lc . ' should be in cache');
         }
 
         $cache_hash = $this->getCacheHash($file_path, $file_contents);
@@ -83,7 +83,7 @@ class ClassLikeStorageCacheProvider
         ) {
             unlink($this->getCacheLocationForClass($fq_classlike_name_lc, $file_path));
 
-            throw new \UnexpectedValueException('Should not be outdated');
+            throw new \UnexpectedValueException($fq_classlike_name_lc . ' should not be outdated');
         }
 
         return $cached_value;
@@ -120,6 +120,21 @@ class ClassLikeStorageCacheProvider
         }
 
         return null;
+    }
+
+    /**
+     * @param  string $fq_classlike_name
+     * @param  string $file_path
+     *
+     * @return void
+     */
+    public function removeCacheForClass($fq_classlike_name, $file_path)
+    {
+        $cache_path = $this->getCacheLocationForClass(strtolower($fq_classlike_name), $file_path);
+
+        if (file_exists($cache_path)) {
+            unlink($cache_path);
+        }
     }
 
     /**

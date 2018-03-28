@@ -77,9 +77,10 @@ class ClassLikeStorageProvider
      *
      * @return void
      */
-    public function remove($fq_classlike_name)
+    public function remove($fq_classlike_name, $file_path)
     {
         unset(self::$storage[strtolower($fq_classlike_name)]);
+        $this->cache->removeCacheForClass($fq_classlike_name, $file_path);
     }
 
     /**

@@ -104,7 +104,7 @@ class Config
      *
      * @var string
      */
-    protected $base_dir;
+    public $base_dir;
 
     /**
      * @var array<int, string>

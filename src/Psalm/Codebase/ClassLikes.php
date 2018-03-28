@@ -166,6 +166,7 @@ class ClassLikes
 
     public function removeClassLike($fq_class_name)
     {
+        error_log('removing ' . $fq_class_name);
         $fq_class_name_lc = strtolower($fq_class_name);
 
         unset(
