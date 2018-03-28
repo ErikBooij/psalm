@@ -104,6 +104,22 @@ class Scanner
         $this->config = $config;
     }
 
+    public function removeClassLike($fq_class_name)
+    {
+        $fq_class_name_lc = strtolower($fq_class_name);
+
+        unset(
+            $this->classlike_files[$fq_class_name_lc]
+        );
+    }
+
+    public function removeFile($file_path)
+    {
+        unset(
+            $this->scanned_files[$file_path]
+        );
+    }
+
     /**
      * @param array<string, string> $files_to_scan
      *

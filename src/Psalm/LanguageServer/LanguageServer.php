@@ -3,6 +3,8 @@ declare(strict_types = 1);
 
 namespace Psalm\LanguageServer;
 
+use Psalm\Checker\ProjectChecker;
+use Psalm\Config;
 use Psalm\LanguageServer\Protocol\{
     ServerCapabilities,
     ClientCapabilities,
@@ -16,6 +18,8 @@ use Psalm\LanguageServer\FilesFinder\{FilesFinder, ClientFilesFinder, FileSystem
 use Psalm\LanguageServer\ContentRetriever\{ContentRetriever, ClientContentRetriever, FileSystemContentRetriever};
 use Psalm\LanguageServer\Index\{DependenciesIndex, GlobalIndex, Index, ProjectIndex, StubsIndex};
 use Psalm\LanguageServer\Cache\{FileSystemCache, ClientCache};
+use Psalm\LanguageServer\Server\TextDocument;
+use Psalm\LanguageServer\Protocol\{Range, Position, Diagnostic, DiagnosticSeverity};
 use AdvancedJsonRpc;
 use Sabre\Event\Loop;
 use Sabre\Event\Promise;
@@ -108,31 +112,48 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
     protected $definitionResolver;
 
     /**
+     * @var ProjectChecker
+     */
+    protected $project_checker;
+
+    /**
+     * @var array<string, string>
+     */
+    protected $filetype_checkers;
+
+    /**
      * @param ProtocolReader  $reader
      * @param ProtocolWriter $writer
      */
-    public function __construct(ProtocolReader $reader, ProtocolWriter $writer)
-    {
+    public function __construct(
+        ProtocolReader $reader,
+        ProtocolWriter $writer,
+        ProjectChecker $project_checker,
+        array $filetype_checkers,
+        Config $config
+    ) {
         parent::__construct($this, '/');
+        $this->project_checker = $project_checker;
+        $this->filetype_checkers = $filetype_checkers;
+        $this->config = $config;
+
         $this->protocolReader = $reader;
         $this->protocolReader->on('close', function () {
             $this->shutdown();
             $this->exit();
         });
         $this->protocolReader->on('message', function (Message $msg) {
-            var_dump('her');
             coroutine(function () use ($msg) {
-                var_dump('here');
                 // Ignore responses, this is the handler for requests and notifications
                 if (AdvancedJsonRpc\Response::isResponse($msg->body)) {
                     return;
                 }
                 $result = null;
                 $error = null;
-                try {
+                //try {
                     // Invoke the method handler to get a result
                     $result = yield $this->dispatch($msg->body);
-                } catch (AdvancedJsonRpc\Error $e) {
+                /*} catch (AdvancedJsonRpc\Error $e) {
                     // If a ResponseError is thrown, send it back in the Response
                     $error = $e;
                 } catch (Throwable $e) {
@@ -143,7 +164,7 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
                         null,
                         $e
                     );
-                }
+                }*/
                 // Only send a Response for a Request
                 // Notifications do not send Responses
                 if (AdvancedJsonRpc\Request::isRequest($msg->body)) {
@@ -156,9 +177,9 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
                 }
             })->otherwise('\\LanguageServer\\crash');
         });
+
         $this->protocolWriter = $writer;
         $this->client = new LanguageClient($reader, $writer);
-
     }
 
     /**
@@ -171,36 +192,121 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
      */
     public function initialize(ClientCapabilities $capabilities, string $rootPath = null, int $processId = null): Promise
     {
-        var_dump('here');
         return coroutine(function () use ($capabilities, $rootPath, $processId) {
+            // Eventually, this might block on something. Leave it as a generator.
+            if (false) {
+                yield true;
+            }
+
+            $this->project_checker->codebase->scanFiles();
+
+            if ($this->textDocument === null) {
+                $this->textDocument = new TextDocument(
+                    $this
+                );
+            }
+
             $serverCapabilities = new ServerCapabilities();
-            // Ask the client to return always full documents (because we need to rebuild the AST from scratch)
+
             $serverCapabilities->textDocumentSync = TextDocumentSyncKind::FULL;
+
+
             // Support "Find all symbols"
-            $serverCapabilities->documentSymbolProvider = true;
+            $serverCapabilities->documentSymbolProvider = false;
             // Support "Find all symbols in workspace"
-            $serverCapabilities->workspaceSymbolProvider = true;
+            $serverCapabilities->workspaceSymbolProvider = false;
             // Support "Go to definition"
-            $serverCapabilities->definitionProvider = true;
+            $serverCapabilities->definitionProvider = false;
             // Support "Find all references"
-            $serverCapabilities->referencesProvider = true;
+            $serverCapabilities->referencesProvider = false;
             // Support "Hover"
-            $serverCapabilities->hoverProvider = true;
+            $serverCapabilities->hoverProvider = false;
             // Support "Completion"
-            $serverCapabilities->completionProvider = new CompletionOptions;
+            /*$serverCapabilities->completionProvider = new CompletionOptions;
             $serverCapabilities->completionProvider->resolveProvider = false;
             $serverCapabilities->completionProvider->triggerCharacters = ['$', '>'];
 
             $serverCapabilities->signatureHelpProvider = new SignatureHelpOptions();
             $serverCapabilities->signatureHelpProvider->triggerCharacters = ['(', ','];
+            */
 
             // Support global references
-            $serverCapabilities->xworkspaceReferencesProvider = true;
-            $serverCapabilities->xdefinitionProvider = true;
-            $serverCapabilities->xdependenciesProvider = true;
+            $serverCapabilities->xworkspaceReferencesProvider = false;
+            $serverCapabilities->xdefinitionProvider = false;
+            $serverCapabilities->xdependenciesProvider = false;
 
             return new InitializeResult($serverCapabilities);
         });
+    }
+
+    public function initialized()
+    {
+
+    }
+
+    public function invalidateFileAndDependents(string $uri)
+    {
+        $file_path = \LanguageServer\uriToPath($uri);
+        $this->project_checker->codebase->reloadFiles([$file_path]);
+    }
+
+    public function analyzeURI(string $uri)
+    {
+        $file_path = \LanguageServer\uriToPath($uri);
+        $relative_path_to_analyze = $this->config->shortenFileName($file_path);
+
+        $codebase = $this->project_checker->codebase;
+
+        $codebase->addFilesToAnalyze([$file_path => $file_path]);
+
+        $codebase->analyzer->analyzeFiles($this->project_checker, 1, false);
+
+        $data = \Psalm\IssueBuffer::clear();
+
+        $data = array_values(array_filter(
+            $data,
+            function (array $issue_data) use ($file_path) : bool {
+                return $issue_data['file_path'] === $file_path;
+            }
+        ));
+
+        $diagnostics = array_map(
+            function (array $issue_data) use ($file_path) : Diagnostic {
+                $issue_file_path = $issue_data['file_path'];
+
+                //$check_name = $issue['check_name'];
+                $description = htmlentities($issue_data['message']);
+                $severity = $issue_data['severity'];
+
+                $issue_uri = \LanguageServer\pathToUri($issue_file_path);
+                $start_line = max($issue_data['line_from'], 1);
+                $end_line = $issue_data['line_to'];
+                $start_column = $issue_data['column_from'];
+                $end_column = $issue_data['column_to'];
+                // Language server has 0 based lines and columns, phan has 1-based lines and columns.
+                $range = new Range(new Position($start_line - 1, $start_column - 1), new Position($end_line - 1, $end_column - 1));
+                switch ($severity) {
+                    case \Psalm\Config::REPORT_INFO:
+                        $diagnostic_severity = DiagnosticSeverity::WARNING;
+                        break;
+                    case \Psalm\Config::REPORT_ERROR:
+                    default:
+                        $diagnostic_severity = DiagnosticSeverity::ERROR;
+                        break;
+                }
+                // TODO: copy issue code in 'json' format
+                return new Diagnostic(
+                    $description,
+                    $range,
+                    null,
+                    $diagnostic_severity,
+                    'Psalm'
+                );
+            },
+            $data
+        );
+
+        $this->client->textDocument->publishDiagnostics($uri, $diagnostics);
     }
 
     /**

@@ -151,33 +151,101 @@ class Codebase
 
         $this->scanner = new Codebase\Scanner(
             $this,
-            $config,
-            $file_storage_provider,
-            $file_provider,
+            $this->config,
+            $this->file_storage_provider,
+            $this->file_provider,
             $this->reflection,
-            $debug_output
+            $this->debug_output
         );
 
         $this->analyzer = new Codebase\Analyzer($config, $file_provider, $debug_output);
 
-        $this->functions = new Codebase\Functions($file_storage_provider, $this->reflection);
-        $this->methods = new Codebase\Methods($config, $classlike_storage_provider);
-        $this->properties = new Codebase\Properties($classlike_storage_provider);
+        $this->functions = new Codebase\Functions($this->file_storage_provider, $this->reflection);
+        $this->methods = new Codebase\Methods($this->classlike_storage_provider);
+        $this->properties = new Codebase\Properties($this->classlike_storage_provider);
+
         $this->classlikes = new Codebase\ClassLikes(
-            $config,
+            $this->config,
             $this,
-            $classlike_storage_provider,
+            $this->classlike_storage_provider,
             $this->scanner,
             $this->methods,
-            $debug_output
+            $this->debug_output
         );
         $this->populator = new Codebase\Populator(
-            $config,
-            $classlike_storage_provider,
-            $file_storage_provider,
+            $this->config,
+            $this->classlike_storage_provider,
+            $this->file_storage_provider,
             $this->classlikes,
-            $debug_output
+            $this->debug_output
         );
+
+        $this->loadAnalyzer();
+    }
+
+    /**
+     * @return void
+     */
+    private function loadAnalyzer()
+    {
+        $this->analyzer = new Codebase\Analyzer($this->config, $this->file_provider, $this->debug_output);
+    }
+
+    /**
+     * @param array<string> $diff_files
+     *
+     * @return void
+     */
+    public function reloadFiles(array $diff_files)
+    {
+        if (!$this->server_mode) {
+            throw new \LogicException('Why are we reloading if not in server mode?');
+        }
+
+        $this->loadAnalyzer();
+
+        \Psalm\Provider\FileReferenceProvider::loadReferenceCache();
+
+        $referenced_files = \Psalm\Checker\ProjectChecker::getReferencedFilesFromDiff($diff_files, false);
+
+        foreach ($diff_files as $diff_file_path) {
+            try {
+                $file_storage = $this->file_storage_provider->get($diff_file_path);
+            } catch (\InvalidArgumentException $e) {
+                continue;
+            }
+
+            foreach ($file_storage->classlikes_in_file as $fq_classlike_name) {
+                $this->classlike_storage_provider->remove($fq_classlike_name);
+                $this->classlikes->removeClassLike($fq_classlike_name);
+            }
+
+            $this->file_storage_provider->remove($diff_file_path);
+            $this->scanner->removeFile($diff_file_path);
+        }
+
+        foreach ($referenced_files as $referenced_file_path) {
+            if (in_array($referenced_file_path, $diff_files)) {
+                continue;
+            }
+
+            $file_storage = $this->file_storage_provider->get($referenced_file_path);
+
+            foreach ($file_storage->classlikes_in_file as $fq_classlike_name) {
+                $this->classlike_storage_provider->remove($fq_classlike_name);
+                $this->classlikes->removeClassLike($fq_classlike_name);
+            }
+
+            $this->file_storage_provider->remove($referenced_file_path);
+            $this->scanner->removeFile($referenced_file_path);
+        }
+
+        $this->scanner->addFilesToDeepScan($referenced_files);
+        $this->scanner->scanFiles($this->classlikes);
+
+        \Psalm\Provider\FileReferenceProvider::updateReferenceCache($this, $referenced_files);
+
+        $this->populator->populateCodebase();
     }
 
     /**

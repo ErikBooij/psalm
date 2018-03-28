@@ -237,6 +237,7 @@ class ProjectChecker
      */
     public function server($base_dir, $address = '127.0.0.1:12345', $server_mode = true)
     {
+        FileReferenceProvider::loadReferenceCache();
         $this->codebase->enterServerMode();
 
         $cwd = getcwd();
@@ -245,40 +246,13 @@ class ProjectChecker
             throw new \InvalidArgumentException('Cannot work with empty cwd');
         }
 
-        echo 'Gathering project files...' . PHP_EOL;
-
         foreach ($this->config->getProjectDirectories() as $dir_name) {
             $this->checkDirWithConfig($dir_name, $this->config);
         }
 
-        echo 'Scanning files...' . PHP_EOL;
-
-        $this->codebase->scanFiles();
-
-        echo 'Project is ready for querying' . PHP_EOL;
-
         $this->output_format = self::TYPE_JSON;
 
         $filetype_checkers = $this->config->getFileTypeCheckers();
-
-        // Convert all errors to ErrorExceptions
-        set_error_handler(
-            /**
-             * @return void
-             */
-            function (int $severity, string $message, string $file, int $line) {
-                if (!(error_reporting() & $severity)) {
-                    // This error code is not included in error_reporting (can also be caused by the @ operator)
-                    return;
-                }
-                throw new \ErrorException($message, 0, $severity, $file, $line);
-            }
-        );
-
-        // Only write uncaught exceptions to STDERR, not STDOUT
-        set_exception_handler(function (\Throwable $e) {
-            fwrite(STDOUT, (string)$e);
-        });
 
         @cli_set_process_title('PHP Language Server');
 
@@ -292,7 +266,10 @@ class ProjectChecker
             stream_set_blocking($socket, false);
             $ls = new LanguageServer(
                 new ProtocolStreamReader($socket),
-                new ProtocolStreamWriter($socket)
+                new ProtocolStreamWriter($socket),
+                $this,
+                $filetype_checkers,
+                $this->config
             );
             Loop\run();
         } elseif ($server_mode && $address) {
@@ -335,7 +312,10 @@ class ProjectChecker
                     // An exit notification will terminate the server
                     $ls = new LanguageServer(
                         new ProtocolStreamReader($socket),
-                        new ProtocolStreamWriter($socket)
+                        new ProtocolStreamWriter($socket),
+                        $this,
+                        $filetype_checkers,
+                        $this->config
                     );
                     Loop\run();
                 }
@@ -345,7 +325,10 @@ class ProjectChecker
             stream_set_blocking(STDIN, false);
             $ls = new LanguageServer(
                 new ProtocolStreamReader(STDIN),
-                new ProtocolStreamWriter(STDOUT)
+                new ProtocolStreamWriter(STDOUT),
+                $this,
+                $filetype_checkers,
+                $this->config
             );
             Loop\run();
         }
@@ -699,9 +682,9 @@ class ProjectChecker
     /**
      * @param  array<string>  $diff_files
      *
-     * @return array<string>
+     * @return array<string, string>
      */
-    public static function getReferencedFilesFromDiff(array $diff_files)
+    public static function getReferencedFilesFromDiff(array $diff_files, $include_referencing_files = true)
     {
         $all_inherited_files_to_check = $diff_files;
 
@@ -717,12 +700,14 @@ class ProjectChecker
 
         $all_files_to_check = $all_inherited_files_to_check;
 
-        foreach ($all_inherited_files_to_check as $file_name) {
-            $dependent_files = FileReferenceProvider::getFilesReferencingFile($file_name);
-            $all_files_to_check = array_merge($dependent_files, $all_files_to_check);
+        if ($include_referencing_files) {
+            foreach ($all_inherited_files_to_check as $file_name) {
+                $dependent_files = FileReferenceProvider::getFilesReferencingFile($file_name);
+                $all_files_to_check = array_merge($dependent_files, $all_files_to_check);
+            }
         }
 
-        return array_unique($all_files_to_check);
+        return array_combine($all_files_to_check, $all_files_to_check);
     }
 
     /**

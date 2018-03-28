@@ -73,6 +73,16 @@ class ClassLikeStorageProvider
     }
 
     /**
+     * @param  string $fq_classlike_name
+     *
+     * @return void
+     */
+    public function remove($fq_classlike_name)
+    {
+        unset(self::$storage[strtolower($fq_classlike_name)]);
+    }
+
+    /**
      * @return array<string, ClassLikeStorage>
      */
     public function getAll()

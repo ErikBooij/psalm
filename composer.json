@@ -21,7 +21,8 @@
         "sabre/event": "^5.0",
         "sabre/uri": "^2.0",
         "webmozart/glob": "^4.1",
-        "webmozart/path-util": "^2.3"
+        "webmozart/path-util": "^2.3",
+        "felixfbecker/language-server": "^5.3"
     },
     "bin": ["psalm", "psalter"],
     "autoload": {
@@ -43,8 +44,7 @@
         "phpunit/phpunit": "^5.7.4",
         "friendsofphp/php-cs-fixer": "^2.3|^2.4|^2.5|^2.6|^2.7|^2.8|^2.9",
         "squizlabs/php_codesniffer": "^3.0",
-        "php-coveralls/php-coveralls": "^2.0",
-        "felixfbecker/language-server": "^5.3"
+        "php-coveralls/php-coveralls": "^2.0"
     },
     "suggest": {
         "ext-igbinary": "^2.0.5"

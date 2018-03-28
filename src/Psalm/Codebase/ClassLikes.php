@@ -164,6 +164,22 @@ class ClassLikes
         }
     }
 
+    public function removeClassLike($fq_class_name)
+    {
+        $fq_class_name_lc = strtolower($fq_class_name);
+
+        unset(
+            $this->existing_classlikes_lc[$fq_class_name_lc],
+            $this->existing_classes_lc[$fq_class_name_lc],
+            $this->existing_traits_lc[$fq_class_name_lc],
+            $this->existing_interfaces_lc[$fq_class_name_lc],
+            $this->existing_classes[$fq_class_name],
+            $this->trait_nodes[$fq_class_name_lc],
+            $this->trait_aliases[$fq_class_name_lc],
+            $this->classlike_references[$fq_class_name_lc]
+        );
+    }
+
     /**
      * @param string        $fq_class_name
      * @param string|null   $file_path

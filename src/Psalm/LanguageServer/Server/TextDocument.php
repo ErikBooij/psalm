@@ -5,7 +5,7 @@ namespace Psalm\LanguageServer\Server;
 
 use PhpParser\PrettyPrinter\Standard as PrettyPrinter;
 use PhpParser\{Node, NodeTraverser};
-use Psalm\LanguageServer\{LanguageClient, PhpDocumentLoader, PhpDocument, DefinitionResolver, CompletionProvider};
+use Psalm\LanguageServer\{LanguageServer, LanguageClient, PhpDocumentLoader, PhpDocument, DefinitionResolver, CompletionProvider};
 use Psalm\LanguageServer\NodeVisitor\VariableReferencesCollector;
 use Psalm\LanguageServer\Protocol\{
     SymbolLocationInformation,
@@ -38,71 +38,14 @@ use function Psalm\LanguageServer\{waitForEvent, isVendored};
 class TextDocument
 {
     /**
-     * The lanugage client object to call methods on the client
-     *
-     * @var \LanguageServer\LanguageClient
+     * @var LanguageServer
      */
-    protected $client;
+    protected $server;
 
-    /**
-     * @var Project
-     */
-    protected $project;
-
-    /**
-     * @var PrettyPrinter
-     */
-    protected $prettyPrinter;
-
-    /**
-     * @var DefinitionResolver
-     */
-    protected $definitionResolver;
-
-    /**
-     * @var CompletionProvider
-     */
-    protected $completionProvider;
-
-    /**
-     * @var ReadableIndex
-     */
-    protected $index;
-
-    /**
-     * @var \stdClass|null
-     */
-    protected $composerJson;
-
-    /**
-     * @var \stdClass|null
-     */
-    protected $composerLock;
-
-    /**
-     * @param PhpDocumentLoader  $documentLoader
-     * @param DefinitionResolver $definitionResolver
-     * @param LanguageClient     $client
-     * @param ReadableIndex      $index
-     * @param \stdClass          $composerJson
-     * @param \stdClass          $composerLock
-     */
     public function __construct(
-        PhpDocumentLoader $documentLoader,
-        DefinitionResolver $definitionResolver,
-        LanguageClient $client,
-        ReadableIndex $index,
-        \stdClass $composerJson = null,
-        \stdClass $composerLock = null
+        LanguageServer $server
     ) {
-        $this->documentLoader = $documentLoader;
-        $this->client = $client;
-        $this->prettyPrinter = new PrettyPrinter();
-        $this->definitionResolver = $definitionResolver;
-        $this->completionProvider = new CompletionProvider($this->definitionResolver, $index);
-        $this->index = $index;
-        $this->composerJson = $composerJson;
-        $this->composerLock = $composerLock;
+        $this->server = $server;
     }
 
     /**
@@ -133,10 +76,13 @@ class TextDocument
      */
     public function didOpen(TextDocumentItem $textDocument)
     {
-        $document = $this->documentLoader->open($textDocument->uri, $textDocument->text);
-        if (!isVendored($document, $this->composerJson)) {
-            $this->client->textDocument->publishDiagnostics($textDocument->uri, $document->getDiagnostics());
-        }
+
+    }
+
+    public function didSave(TextDocumentItem $textDocument)
+    {
+        $this->server->invalidateFileAndDependents($textDocument->uri);
+        $this->server->analyzeURI($textDocument->uri);
     }
 
     /**
@@ -148,9 +94,7 @@ class TextDocument
      */
     public function didChange(VersionedTextDocumentIdentifier $textDocument, array $contentChanges)
     {
-        $document = $this->documentLoader->get($textDocument->uri);
-        $document->updateContent($contentChanges[0]->text);
-        $this->client->textDocument->publishDiagnostics($textDocument->uri, $document->getDiagnostics());
+        //$this->server->analyzeURI($textDocument->uri);
     }
 
     /**
@@ -163,7 +107,7 @@ class TextDocument
      */
     public function didClose(TextDocumentIdentifier $textDocument)
     {
-        $this->documentLoader->close($textDocument->uri);
+        //$this->documentLoader->close($textDocument->uri);
     }
 
     /**
@@ -303,7 +247,7 @@ class TextDocument
      * @param Position $position The position inside the text document
      * @return Promise <Hover>
      */
-    public function hover(TextDocumentIdentifier $textDocument, Position $position): Promise
+    /*public function hover(TextDocumentIdentifier $textDocument, Position $position): Promise
     {
         return coroutine(function () use ($textDocument, $position) {
             $document = yield $this->documentLoader->getOrLoad($textDocument->uri);
@@ -339,7 +283,7 @@ class TextDocument
             }
             return new Hover($contents, $range);
         });
-    }
+    }*/
 
     /**
      * The Completion request is sent from the client to the server to compute completion items at a given cursor

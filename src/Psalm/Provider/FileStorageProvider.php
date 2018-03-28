@@ -41,6 +41,16 @@ class FileStorageProvider
 
     /**
      * @param  string $file_path
+     *
+     * @return void
+     */
+    public function remove($file_path)
+    {
+        unset(self::$storage[strtolower($file_path)]);
+    }
+
+    /**
+     * @param  string $file_path
      * @param  string $file_contents
      *
      * @return bool
