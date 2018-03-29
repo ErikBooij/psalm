@@ -739,6 +739,8 @@ class MethodCallChecker extends \Psalm\Checker\Statements\Expression\CallChecker
 
                 $stmt->inferredType->by_ref = $returns_by_ref;
             }
+
+            $stmt->name->inferredType = $return_type;
         }
 
         if ($method_id === null) {

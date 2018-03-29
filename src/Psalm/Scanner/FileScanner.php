@@ -59,7 +59,8 @@ class FileScanner implements FileSource
 
         $stmts = $codebase->statements_provider->getStatementsForFile(
             $file_storage->file_path,
-            $debug_output
+            $debug_output,
+            $codebase->server_mode
         );
 
         if ($debug_output) {

@@ -56,6 +56,8 @@ class StatementsProvider
 
         $version = (string) PHP_PARSER_VERSION . ($server_mode ? 'server' : '') . $this->this_modified_time;
 
+        error_log(($server_mode ? 'server ' : 'not server ') . $file_path);
+
         $file_contents = $this->file_provider->getContents($file_path);
         $modified_time = $this->file_provider->getModifiedTime($file_path);
 

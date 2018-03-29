@@ -32,8 +32,8 @@ class Range
     public static function fromNode(Node $node)
     {
         return new self(
-            new Position($node->getAttribute('startLine'), $node->getAttribute('startColumn') - 1),
-            new Position($node->getAttribute('endLine'), $node->getAttribute('endColumn'))
+            new Position($node->getAttribute('startLine') - 1, $node->getAttribute('startColumn') - 1),
+            new Position($node->getAttribute('endLine') - 1, $node->getAttribute('endColumn'))
         );
     }
 

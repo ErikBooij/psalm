@@ -26,7 +26,8 @@ class TemplateScanner extends Psalm\Scanner\FileScanner
     ) {
         $stmts = $codebase->statements_provider->getStatementsForFile(
             $file_storage->file_path,
-            $debug_output
+            $debug_output,
+            $codebase->server_mode
         );
 
         if (empty($stmts)) {

@@ -80,6 +80,7 @@ class PropertyFetchChecker
         if ($var_id && $context->hasVariable($var_id, $statements_checker)) {
             // we don't need to check anything
             $stmt->inferredType = $context->vars_in_scope[$var_id];
+            $stmt->name->inferredType = $stmt->inferredType;
 
             $codebase->analyzer->incrementNonMixedCount($statements_checker->getCheckedFilePath());
 
@@ -160,6 +161,7 @@ class PropertyFetchChecker
             }
 
             $stmt->inferredType = Type::getMixed();
+            $stmt->name->inferredType = $stmt->inferredType;
 
             return null;
         }
@@ -417,6 +419,8 @@ class PropertyFetchChecker
                 $stmt->inferredType = $class_property_type;
             }
         }
+
+        $stmt->name->inferredType = $stmt->inferredType;
 
         if ($invalid_fetch_types) {
             $lhs_type_part = $invalid_fetch_types[0];

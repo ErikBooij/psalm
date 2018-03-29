@@ -220,7 +220,7 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
             // Support "Find all references"
             $serverCapabilities->referencesProvider = false;
             // Support "Hover"
-            $serverCapabilities->hoverProvider = false;
+            $serverCapabilities->hoverProvider = true;
             // Support "Completion"
             /*$serverCapabilities->completionProvider = new CompletionOptions;
             $serverCapabilities->completionProvider->resolveProvider = false;
@@ -259,9 +259,19 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
 
         $codebase->addFilesToAnalyze([$file_path => $file_path]);
 
-        $codebase->analyzer->analyzeFiles($this->project_checker, 1, false);
+        $filetype_checkers = $codebase->config->getFileTypeCheckers();
 
+        $file_checker = $codebase->analyzer->getFileChecker($this->project_checker, $file_path, $filetype_checkers);
+        $file_checker->analyze(null, false, true);
+
+        return $file_checker;
+    }
+
+    public function emitIssues(string $uri)
+    {
         $data = \Psalm\IssueBuffer::clear();
+
+        $file_path = \LanguageServer\uriToPath($uri);
 
         $data = array_values(array_filter(
             $data,

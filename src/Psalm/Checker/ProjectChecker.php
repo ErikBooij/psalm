@@ -332,27 +332,6 @@ class ProjectChecker
             );
             Loop\run();
         }
-
-        /**
-        $file_checker = $this->codebase->analyzer->getFileChecker(
-            $this,
-            realpath($buf_parts[0]),
-            $filetype_checkers
-        );
-
-        echo 'Analyzing ' . $file_checker->getFilePath() . PHP_EOL;
-
-        $file_checker->analyze(null, false, true);
-
-        $line_number = (int)$buf_parts[1];
-        $column = (int)$buf_parts[2];
-
-        echo 'Getting node at position ' . $line_number . ':' . $column;
-
-        $node = StatementsProvider::getNodeAtPosition(
-            $file_checker->getStatements(),
-            new \Psalm\LanguageServer\Protocol\Position($line_number, $column)
-        );*/
     }
 
     /**
@@ -821,7 +800,11 @@ class ProjectChecker
             $file_checker = $this->getFileCheckerForClassLike($appearing_fq_class_name);
         }
 
-        $stmts = $this->codebase->getStatementsForFile($file_checker->getFilePath());
+        $stmts = $this->codebase->getStatementsForFile(
+            $file_checker->getFilePath(),
+            false,
+            $this->codebase->server_mode
+        );
 
         $file_checker->populateCheckers($stmts);
 

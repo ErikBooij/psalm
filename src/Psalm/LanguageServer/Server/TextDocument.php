@@ -27,6 +27,7 @@ use Psalm\LanguageServer\Protocol\{
     CompletionItemKind
 };
 use Psalm\LanguageServer\Index\ReadableIndex;
+use Psalm\Checker\FileChecker;
 use Sabre\Event\Promise;
 use Sabre\Uri;
 use function Sabre\Event\coroutine;
@@ -42,10 +43,30 @@ class TextDocument
      */
     protected $server;
 
+    /**
+     * @var FileChecker|null
+     */
+    private $file_checker;
+
+    /**
+     * @var string|null
+     */
+    private $current_uri;
+
     public function __construct(
         LanguageServer $server
     ) {
         $this->server = $server;
+    }
+
+    private function getAnalyzedFileChecker(string $uri)
+    {
+        if (!$this->file_checker || $uri !== $this->current_uri) {
+            $this->file_checker = $this->server->analyzeURI($uri);
+            $this->current_uri = $uri;
+        }
+        
+        return $this->file_checker;
     }
 
     /**
@@ -82,7 +103,9 @@ class TextDocument
     public function didSave(TextDocumentItem $textDocument)
     {
         $this->server->invalidateFileAndDependents($textDocument->uri);
-        $this->server->analyzeURI($textDocument->uri);
+        $this->file_checker = null;
+        $this->getAnalyzedFileChecker($textDocument->uri);
+        $this->server->emitIssues($textDocument->uri);
     }
 
     /**
@@ -247,43 +270,35 @@ class TextDocument
      * @param Position $position The position inside the text document
      * @return Promise <Hover>
      */
-    /*public function hover(TextDocumentIdentifier $textDocument, Position $position): Promise
+    public function hover(TextDocumentIdentifier $textDocument, Position $position): Promise
     {
         return coroutine(function () use ($textDocument, $position) {
-            $document = yield $this->documentLoader->getOrLoad($textDocument->uri);
+            if (false) {
+                yield true;
+            }
+            $file_checker = $this->getAnalyzedFileChecker($textDocument->uri);
             // Find the node under the cursor
-            $node = $document->getNodeAtPosition($position);
+            $node = \Psalm\Provider\StatementsProvider::getNodeAtPosition(
+                $file_checker->getStatements(),
+                $position
+            );
+
             if ($node === null) {
                 return new Hover([]);
             }
-            $definedFqn = DefinitionResolver::getDefinedFqn($node);
-            while (true) {
-                if ($definedFqn) {
-                    // Support hover for definitions
-                    $def = $this->index->getDefinition($definedFqn);
-                } else {
-                    // Get the definition for whatever node is under the cursor
-                    $def = $this->definitionResolver->resolveReferenceNodeToDefinition($node);
-                }
-                // If no result was found and we are still indexing, try again after the index was updated
-                if ($def !== null || $this->index->isComplete()) {
-                    break;
-                }
-                yield waitForEvent($this->index, 'definition-added');
-            }
+
+            error_log((string) $node->inferredType);
+
             $range = Range::fromNode($node);
-            if ($def === null) {
+            if (!isset($node->inferredType)) {
                 return new Hover([], $range);
             }
-            if ($def->declarationLine) {
-                $contents[] = new MarkedString('php', "<?php\n" . $def->declarationLine);
-            }
-            if ($def->documentation) {
-                $contents[] = $def->documentation;
-            }
+            $contents = [];
+            $contents[] = new MarkedString('php', "<?php\n" . $node->inferredType);
+            
             return new Hover($contents, $range);
         });
-    }*/
+    }
 
     /**
      * The Completion request is sent from the client to the server to compute completion items at a given cursor

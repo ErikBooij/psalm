@@ -419,6 +419,8 @@ class StaticCallChecker extends \Psalm\Checker\Statements\Expression\CallChecker
             }
         }
 
+        $stmt->name->inferredType = $stmt->inferredType;
+
         if ($method_id === null) {
             return self::checkMethodArgs(
                 $method_id,
