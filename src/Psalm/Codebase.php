@@ -828,35 +828,13 @@ class Codebase
                 if (strpos($symbol, '$') !== false) {
                     $storage = $this->properties->getStorage($symbol);
                     
-                    $symbol_text = ($storage->type ?: 'mixed') . ' ' . $symbol_name;
-                } else {
-                    $declaring_method_id = $this->methods->getDeclaringMethodId($symbol);
-                    $storage = $this->methods->getStorage($declaring_method_id);
-
-                    $symbol_text = 'function ' . $storage->cased_name . '(' . implode(
-                        ', ',
-                        array_map(
-                            function(FunctionLikeParameter $param) : string {
-                                return ($param->type ?: 'mixed') . ' $' . $param->name;
-                            },
-                            $storage->params
-                        )
-                    ) . ') : ' . ($storage->return_type ?: 'mixed');
+                    return $storage->getInfo() . ' ' . $symbol_name;
                 }
 
-                switch ($storage->visibility) {
-                    case ClassLikeChecker::VISIBILITY_PRIVATE:
-                        $visibility_text = 'private';
-                        break;
-                    
-                    case ClassLikeChecker::VISIBILITY_PROTECTED:
-                        $visibility_text = 'protected';
+                $declaring_method_id = $this->methods->getDeclaringMethodId($symbol);
+                $storage = $this->methods->getStorage($declaring_method_id);
 
-                    default:
-                        $visibility_text = 'public';
-                }
-
-                return $visibility_text . ' ' . $symbol_text;
+                return (string) $storage;
             }
 
             if (strpos($symbol, '()')) {
@@ -867,15 +845,7 @@ class Codebase
                 if (isset($file_storage->functions[$function_name])) {
                     $function_storage = $file_storage->functions[$function_name];
 
-                    return $symbol_text = 'function ' . $function_storage->cased_name . '(' . implode(
-                        ', ',
-                        array_map(
-                            function(FunctionLikeParameter $param) : string {
-                                return ($param->type ?: 'mixed') . ' $' . $param->name;
-                            },
-                            $function_storage->params
-                        )
-                    ) . ') : ' . ($storage->return_type ?: 'mixed');
+                    return $symbol_text = (string)$function_storage;
                 }
 
                 return null;

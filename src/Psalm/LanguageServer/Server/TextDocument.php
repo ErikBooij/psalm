@@ -29,6 +29,7 @@ use Psalm\LanguageServer\Protocol\{
 use Psalm\Codebase;
 use Psalm\LanguageServer\Index\ReadableIndex;
 use Psalm\Checker\FileChecker;
+use Psalm\Checker\ClassLikeChecker;
 use Sabre\Event\Promise;
 use Sabre\Uri;
 use function Sabre\Event\coroutine;
@@ -92,9 +93,12 @@ class TextDocument
 
     public function didSave(TextDocumentItem $textDocument)
     {
-        $this->codebase->removeTemporaryFileChanges(\LanguageServer\uriToPath($textDocument->uri));
+        $file_path = \LanguageServer\uriToPath($textDocument->uri);
+        
+        $this->codebase->removeTemporaryFileChanges($file_path);
         $this->server->invalidateFileAndDependents($textDocument->uri);
-        $this->server->analyzePath(\LanguageServer\uriToPath($textDocument->uri));
+
+        $this->server->analyzePath($file_path);
         $this->server->emitIssues($textDocument->uri);
     }
 
@@ -340,9 +344,83 @@ class TextDocument
      */
     public function completion(TextDocumentIdentifier $textDocument, Position $position): Promise
     {
+        error_log('called');
         return coroutine(function () use ($textDocument, $position) {
-            $document = yield $this->documentLoader->getOrLoad($textDocument->uri);
-            return $this->completionProvider->provideCompletion($document, $position);
+            if (false) {
+                yield true;
+            }
+
+            $file_path = \LanguageServer\uriToPath($textDocument->uri);
+
+            $file_contents = $this->codebase->getFileContents($file_path);
+
+            $offset = $position->toOffset($file_contents);
+
+            list($reference_map, $type_map) = $this->server->getMapsForPath($file_path);
+
+            $reference = null;
+            $recent_type = null;
+
+            $reversed_type_map = array_reverse($type_map, true);
+
+            foreach ($reversed_type_map as $start_pos => list($end_pos, $possible_type)) {
+                $recent_type = $possible_type;
+                
+                if ($offset < $start_pos) {
+                    continue;
+                }
+
+                if ($offset > $end_pos + 1) {
+                    break;
+                }
+            }
+
+            if (!$recent_type || $recent_type === 'mixed') {
+                return [];
+            }
+
+            $gap = substr($file_contents, $end_pos + 1, $offset - $end_pos - 1);
+
+            $completion_items = [];
+
+            if ($gap === '->') {
+                try {
+                    $class_storage = $this->codebase->classlike_storage_provider->get($recent_type);
+
+                    foreach ($class_storage->appearing_method_ids as $declaring_method_id) {
+                        $method_storage = $this->codebase->methods->getStorage($declaring_method_id);
+
+                        $completion_items[] = new CompletionItem(
+                            (string)$method_storage,
+                            CompletionItemKind::METHOD,
+                            null,
+                            null,
+                            null,
+                            null,
+                            $method_storage->cased_name . '('
+                        );
+                    }
+
+                    foreach ($class_storage->declaring_property_ids as $property_name => $declaring_property_id) {
+                        $property_storage = $this->codebase->properties->getStorage($declaring_property_id);
+
+                        $completion_items[] = new CompletionItem(
+                            $property_storage->getInfo() . ' $' . $property_name,
+                            CompletionItemKind::PROPERTY,
+                            null,
+                            null,
+                            null,
+                            null,
+                            $property_name
+                        );
+                    }
+                } catch (\Exception $e) {
+                    error_log($e->getMessage());
+                    return [];
+                }
+            }
+
+            return $completion_items;
         });
     }
 

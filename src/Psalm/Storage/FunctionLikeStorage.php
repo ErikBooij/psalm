@@ -4,6 +4,7 @@ namespace Psalm\Storage;
 use Psalm\CodeLocation;
 use Psalm\FunctionLikeParameter;
 use Psalm\Type;
+use Psalm\Checker\ClassLikeChecker;
 
 class FunctionLikeStorage
 {
@@ -99,4 +100,35 @@ class FunctionLikeStorage
 
     /** @var array<int, Assertion> */
     public $assertions = [];
+
+    public function __toString()
+    {
+        $symbol_text = 'function ' . $this->cased_name . '(' . implode(
+            ', ',
+            array_map(
+                function(FunctionLikeParameter $param) : string {
+                    return ($param->type ?: 'mixed') . ' $' . $param->name;
+                },
+                $this->params
+            )
+        ) . ') : ' . ($this->return_type ?: 'mixed');
+
+        if (!$this instanceof MethodStorage) {
+            return $symbol_text;
+        }
+
+        switch ($this->visibility) {
+            case ClassLikeChecker::VISIBILITY_PRIVATE:
+                $visibility_text = 'private';
+                break;
+            
+            case ClassLikeChecker::VISIBILITY_PROTECTED:
+                $visibility_text = 'protected';
+
+            default:
+                $visibility_text = 'public';
+        }
+
+        return $visibility_text . ' ' . $symbol_text;
+    }
 }

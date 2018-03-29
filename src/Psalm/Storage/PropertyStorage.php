@@ -3,6 +3,7 @@ namespace Psalm\Storage;
 
 use Psalm\CodeLocation;
 use Psalm\Type;
+use Psalm\Checker\ClassLikeChecker;
 
 class PropertyStorage
 {
@@ -50,4 +51,21 @@ class PropertyStorage
      * @var array<string, array<int, CodeLocation>>|null
      */
     public $referencing_locations;
+
+    public function getInfo() : string
+    {
+        switch ($this->visibility) {
+            case ClassLikeChecker::VISIBILITY_PRIVATE:
+                $visibility_text = 'private';
+                break;
+            
+            case ClassLikeChecker::VISIBILITY_PROTECTED:
+                $visibility_text = 'protected';
+
+            default:
+                $visibility_text = 'public';
+        }
+
+        return $visibility_text . ' ' . ($this->type ?: 'mixed');
+    }
 }

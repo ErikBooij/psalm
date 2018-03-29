@@ -223,10 +223,11 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
             // Support "Hover"
             $serverCapabilities->hoverProvider = true;
             // Support "Completion"
-            /*$serverCapabilities->completionProvider = new CompletionOptions;
+            $serverCapabilities->completionProvider = new CompletionOptions;
             $serverCapabilities->completionProvider->resolveProvider = false;
             $serverCapabilities->completionProvider->triggerCharacters = ['$', '>'];
-
+            
+            /*
             $serverCapabilities->signatureHelpProvider = new SignatureHelpOptions();
             $serverCapabilities->signatureHelpProvider->triggerCharacters = ['(', ','];
             */

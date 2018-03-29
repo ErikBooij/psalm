@@ -252,6 +252,10 @@ class VariableFetchChecker
             }
         } else {
             $stmt->inferredType = clone $context->vars_in_scope[$var_name];
+
+            if ($codebase->server_mode && isset($stmt->inferredType)) {
+                $codebase->addNodeType($statements_checker->getFilePath(), $stmt, $stmt->inferredType);
+            }
         }
 
         return null;

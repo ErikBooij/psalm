@@ -756,6 +756,10 @@ class MethodCallChecker extends \Psalm\Checker\Statements\Expression\CallChecker
             );
         }
 
+        if ($codebase->server_mode && isset($stmt->inferredType)) {
+            $codebase->addNodeType($statements_checker->getFilePath(), $stmt, $stmt->inferredType);
+        }
+
         if (!$config->remember_property_assignments_after_call && !$context->collect_initializations) {
             $context->removeAllObjectVars();
         }
