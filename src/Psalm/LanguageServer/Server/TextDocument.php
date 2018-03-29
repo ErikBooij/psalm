@@ -49,32 +49,12 @@ class TextDocument
      */
     protected $codebase;
 
-    /**
-     * @var FileChecker|null
-     */
-    private $file_checker;
-
-    /**
-     * @var string|null
-     */
-    private $current_uri;
-
     public function __construct(
         LanguageServer $server,
         Codebase $codebase
     ) {
         $this->server = $server;
         $this->codebase = $codebase;
-    }
-
-    private function getAnalyzedFileChecker(string $uri)
-    {
-        if (!$this->file_checker || $uri !== $this->current_uri) {
-            $this->file_checker = $this->server->analyzePath(\LanguageServer\uriToPath($uri));
-            $this->current_uri = $uri;
-        }
-        
-        return $this->file_checker;
     }
 
     /**
@@ -105,14 +85,16 @@ class TextDocument
      */
     public function didOpen(TextDocumentItem $textDocument)
     {
-
+        $this->server->invalidateFileAndDependents($textDocument->uri);
+        $this->server->analyzePath(\LanguageServer\uriToPath($textDocument->uri));
+        $this->server->emitIssues($textDocument->uri);
     }
 
     public function didSave(TextDocumentItem $textDocument)
     {
+        $this->codebase->removeTemporaryFileChanges(\LanguageServer\uriToPath($textDocument->uri));
         $this->server->invalidateFileAndDependents($textDocument->uri);
-        $this->file_checker = null;
-        $this->getAnalyzedFileChecker($textDocument->uri);
+        $this->server->analyzePath(\LanguageServer\uriToPath($textDocument->uri));
         $this->server->emitIssues($textDocument->uri);
     }
 
@@ -125,7 +107,9 @@ class TextDocument
      */
     public function didChange(VersionedTextDocumentIdentifier $textDocument, array $contentChanges)
     {
-        //$this->server->analyzeURI($textDocument->uri);
+        $this->codebase->addTemporaryFileChanges(\LanguageServer\uriToPath($textDocument->uri), $contentChanges);
+        $this->server->analyzePath(\LanguageServer\uriToPath($textDocument->uri));
+        $this->server->emitIssues($textDocument->uri);
     }
 
     /**
@@ -246,7 +230,7 @@ class TextDocument
 
             $file_path = \LanguageServer\uriToPath($textDocument->uri);
 
-            $file_contents = file_get_contents($file_path);
+            $file_contents = $this->codebase->getFileContents($file_path);
 
             $offset = $position->toOffset($file_contents);
 
@@ -271,7 +255,7 @@ class TextDocument
                 return new Hover([]);
             }
 
-            $code_location = $this->codebase->getSymbolLocation($reference);
+            $code_location = $this->codebase->getSymbolLocation($file_path, $reference);
 
             if (!$code_location) {
                 return [];
@@ -303,7 +287,7 @@ class TextDocument
 
             $file_path = \LanguageServer\uriToPath($textDocument->uri);
 
-            $file_contents = file_get_contents($file_path);
+            $file_contents = $this->codebase->getFileContents($file_path);
 
             $offset = $position->toOffset($file_contents);
 
@@ -334,7 +318,7 @@ class TextDocument
             );
 
             $contents = [];
-            $contents[] = new MarkedString('php', "<?php\n" . $this->codebase->getSymbolInformation($reference));
+            $contents[] = new MarkedString('php', "<?php\n" . $this->codebase->getSymbolInformation($file_path, $reference));
             
             return new Hover($contents, $range);
         });

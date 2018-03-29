@@ -660,7 +660,7 @@ class DependencyFinderVisitor extends PhpParser\NodeVisitorAbstract implements P
             $class_storage = $this->classlike_storages[count($this->classlike_storages) - 1];
 
             if (isset($class_storage->methods[strtolower($stmt->name->name)])) {
-                throw new \InvalidArgumentException('Cannot re-register ' . $function_id);
+                return;
             }
 
             $storage = $class_storage->methods[strtolower($stmt->name->name)] = new MethodStorage();

@@ -220,21 +220,7 @@ class Codebase
         $referenced_files = \Psalm\Checker\ProjectChecker::getReferencedFilesFromDiff($diff_files, false);
 
         foreach ($diff_files as $diff_file_path) {
-            try {
-                $file_storage = $this->file_storage_provider->get($diff_file_path);
-            } catch (\InvalidArgumentException $e) {
-                continue;
-            }
-
-            foreach ($file_storage->classlikes_in_file as $fq_classlike_name) {
-                $this->classlike_storage_provider->remove($fq_classlike_name, $diff_file_path);
-                $this->classlikes->removeClassLike($fq_classlike_name);
-            }
-
-            $this->file_storage_provider->remove($diff_file_path);
-            $this->scanner->removeFile($diff_file_path);
-
-            unset($this->type_map[strtolower($diff_file_path)], $this->reference_map[strtolower($diff_file_path)]);
+            $this->invalidateInformationForFile($diff_file_path);
         }
 
         foreach ($referenced_files as $referenced_file_path) {
@@ -833,7 +819,7 @@ class Codebase
         return $this->methods->getCasedMethodId($method_id);
     }
 
-    public function getSymbolInformation(string $symbol) : ?string
+    public function getSymbolInformation(string $file_path, string $symbol) : ?string
     {
         try {
             if (strpos($symbol, '::')) {
@@ -847,7 +833,7 @@ class Codebase
                     $declaring_method_id = $this->methods->getDeclaringMethodId($symbol);
                     $storage = $this->methods->getStorage($declaring_method_id);
 
-                    $symbol_text = $storage->cased_name . '(' . implode(
+                    $symbol_text = 'function ' . $storage->cased_name . '(' . implode(
                         ', ',
                         array_map(
                             function(FunctionLikeParameter $param) : string {
@@ -873,6 +859,28 @@ class Codebase
                 return $visibility_text . ' ' . $symbol_text;
             }
 
+            if (strpos($symbol, '()')) {
+                $file_storage = $this->file_storage_provider->get($file_path);
+
+                $function_name = substr($symbol, 0, -2);
+
+                if (isset($file_storage->functions[$function_name])) {
+                    $function_storage = $file_storage->functions[$function_name];
+
+                    return $symbol_text = 'function ' . $function_storage->cased_name . '(' . implode(
+                        ', ',
+                        array_map(
+                            function(FunctionLikeParameter $param) : string {
+                                return ($param->type ?: 'mixed') . ' $' . $param->name;
+                            },
+                            $function_storage->params
+                        )
+                    ) . ') : ' . ($storage->return_type ?: 'mixed');
+                }
+
+                return null;
+            }
+
             $storage = $this->classlike_storage_provider->get($symbol);
 
             return ($storage->abstract ? 'abstract ' : '') . 'class ' . $storage->name;
@@ -882,7 +890,7 @@ class Codebase
         }
     }
 
-    public function getSymbolLocation(string $symbol) : ?\Psalm\CodeLocation
+    public function getSymbolLocation(string $file_path, string $symbol) : ?\Psalm\CodeLocation
     {
         try {
             if (strpos($symbol, '::')) {
@@ -900,6 +908,18 @@ class Codebase
                 return $storage->location;
             }
 
+            if (strpos($symbol, '()')) {
+                $file_storage = $this->file_storage_provider->get($file_path);
+
+                $function_name = substr($symbol, 0, -2);
+
+                if (isset($file_storage->functions[$function_name])) {
+                    return $file_storage->functions[$function_name]->location;
+                }
+
+                return null;
+            }
+
             $storage = $this->classlike_storage_provider->get($symbol);
 
             return $storage->location;
@@ -907,5 +927,43 @@ class Codebase
             error_log($e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * @param \LanguageServer\Protocol\TextDocumentContentChangeEvent[] $changes
+     */
+    public function addTemporaryFileChanges(string $file_path, array $changes)
+    {
+        $this->file_provider->addTemporaryFileChanges($file_path, $changes);
+        $this->invalidateInformationForFile($file_path);
+        $this->scanner->addFilesToDeepScan([$file_path]);
+        $this->scanner->scanFiles($this->classlikes);
+    }
+    
+    private function invalidateInformationForFile(string $file_path)
+    {
+        try {
+            $file_storage = $this->file_storage_provider->get($file_path);
+        } catch (\InvalidArgumentException $e) {
+            return;
+        }
+
+        foreach ($file_storage->classlikes_in_file as $fq_classlike_name) {
+            $this->classlike_storage_provider->remove($fq_classlike_name, $file_path);
+            $this->classlikes->removeClassLike($fq_classlike_name);
+        }
+
+        $this->file_storage_provider->remove($file_path);
+        $this->scanner->removeFile($file_path);
+
+        unset($this->type_map[strtolower($file_path)], $this->reference_map[strtolower($file_path)]);
+    }
+
+    public function removeTemporaryFileChanges(string $file_path)
+    {
+        $this->file_provider->removeTemporaryFileChanges($file_path);
+        $this->invalidateInformationForFile($file_path);
+        $this->scanner->addFilesToDeepScan([$file_path]);
+        $this->scanner->scanFiles($this->classlikes);
     }
 }
