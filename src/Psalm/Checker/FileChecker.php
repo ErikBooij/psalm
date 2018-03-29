@@ -89,7 +89,7 @@ class FileChecker extends SourceChecker implements StatementsSource
 
         $file_storage = $codebase->file_storage_provider->get($this->file_path);
 
-        if (!$file_storage->deep_scan) {
+        if (!$file_storage->deep_scan && !$codebase->server_mode) {
             throw new \UnexpectedValueException('File ' . $this->file_path . ' has not been properly scanned');
         }
 

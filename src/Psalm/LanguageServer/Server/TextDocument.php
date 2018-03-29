@@ -26,6 +26,7 @@ use Psalm\LanguageServer\Protocol\{
     CompletionItem,
     CompletionItemKind
 };
+use Psalm\Codebase;
 use Psalm\LanguageServer\Index\ReadableIndex;
 use Psalm\Checker\FileChecker;
 use Sabre\Event\Promise;
@@ -44,6 +45,11 @@ class TextDocument
     protected $server;
 
     /**
+     * @var Codebase
+     */
+    protected $codebase;
+
+    /**
      * @var FileChecker|null
      */
     private $file_checker;
@@ -54,9 +60,11 @@ class TextDocument
     private $current_uri;
 
     public function __construct(
-        LanguageServer $server
+        LanguageServer $server,
+        Codebase $codebase
     ) {
         $this->server = $server;
+        $this->codebase = $codebase;
     }
 
     private function getAnalyzedFileChecker(string $uri)
@@ -232,34 +240,50 @@ class TextDocument
     public function definition(TextDocumentIdentifier $textDocument, Position $position): Promise
     {
         return coroutine(function () use ($textDocument, $position) {
-            $document = yield $this->documentLoader->getOrLoad($textDocument->uri);
-            $node = $document->getNodeAtPosition($position);
-            if ($node === null) {
-                return [];
+            if (false) {
+                yield true;
             }
-            // Handle definition nodes
-            $fqn = DefinitionResolver::getDefinedFqn($node);
-            while (true) {
-                if ($fqn) {
-                    $def = $this->index->getDefinition($fqn);
-                } else {
-                    // Handle reference nodes
-                    $def = $this->definitionResolver->resolveReferenceNodeToDefinition($node, $textDocument->uri);
-                }
-                // If no result was found and we are still indexing, try again after the index was updated
-                if ($def !== null || $this->index->isComplete()) {
+
+            $file_path = \LanguageServer\uriToPath($textDocument->uri);
+
+            $file_contents = file_get_contents($file_path);
+
+            $offset = $position->toOffset($file_contents);
+
+            list($reference_map, $type_map) = $this->server->getMapsForPath($file_path);
+
+            $reference = null;
+            $type = null;
+
+            foreach ($reference_map as $start_pos => list($end_pos, $possible_reference)) {
+                if ($offset < $start_pos) {
                     break;
                 }
-                yield waitForEvent($this->index, 'definition-added');
+
+                if ($offset > $end_pos + 1) {
+                    continue;
+                }
+
+                $reference = $possible_reference;
             }
-            if (
-                $def === null
-                || $def->symbolInformation === null
-                || Uri\parse($def->symbolInformation->location->uri)['scheme'] === 'phpstubs'
-            ) {
+
+            if ($reference === null) {
+                return new Hover([]);
+            }
+
+            $code_location = $this->codebase->getSymbolLocation($reference);
+
+            if (!$code_location) {
                 return [];
             }
-            return $def->symbolInformation->location;
+
+            return new Location(
+                \LanguageServer\pathToUri($code_location->file_path),
+                new Range(
+                    new Position($code_location->getLineNumber() - 1, $code_location->getColumn() - 1),
+                    new Position($code_location->getEndLineNumber() - 1, $code_location->getEndColumn() - 1)
+                )
+            );
         });
     }
 
@@ -289,7 +313,6 @@ class TextDocument
             $type = null;
 
             foreach ($reference_map as $start_pos => list($end_pos, $possible_reference)) {
-                error_log($start_pos . ' ' . $offset . ' ' . $end_pos);
                 if ($offset < $start_pos) {
                     break;
                 }
@@ -311,7 +334,7 @@ class TextDocument
             );
 
             $contents = [];
-            $contents[] = new MarkedString('php', "<?php\n" . $reference);
+            $contents[] = new MarkedString('php', "<?php\n" . $this->codebase->getSymbolInformation($reference));
             
             return new Hover($contents, $range);
         });

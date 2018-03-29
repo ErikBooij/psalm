@@ -9,6 +9,7 @@ use Psalm\Provider\StatementsProvider;
 use Psalm\Storage\ClassLikeStorage;
 use Psalm\Storage\FileStorage;
 use Psalm\Storage\FunctionLikeStorage;
+use Psalm\Checker\ClassLikeChecker;
 
 class Codebase
 {
@@ -257,8 +258,6 @@ class Codebase
             );
         }
 
-        error_log(var_export($referenced_files, true));
-
         $this->scanner->addFilesToDeepScan($referenced_files);
         $this->scanner->scanFiles($this->classlikes);
 
@@ -371,13 +370,19 @@ class Codebase
 
         $file_path_lc = strtolower($file_path);
 
+        if (!isset($this->reference_map[$file_path_lc])) {
+            $this->reference_map[$file_path_lc] = [];
+        }
+
+        if (!isset($this->type_map[$file_path_lc])) {
+            $this->type_map[$file_path_lc] = [];
+        }
+
         ksort($this->reference_map[$file_path_lc]);
         ksort($this->type_map[$file_path_lc]);
 
         $cached_value->reference_map = $this->reference_map[$file_path_lc];
         $cached_value->type_map = $this->type_map[$file_path_lc];
-
-        error_log(var_export($this->reference_map, true));
 
         $this->file_storage_provider->cache->writeToCache(
             $cached_value,
@@ -402,8 +407,6 @@ class Codebase
         }
 
         $storage = $this->file_storage_provider->get($file_path);
-
-        error_log(var_export($storage->reference_map, true));
 
         return [$storage->reference_map, $storage->type_map];
     }
@@ -828,5 +831,81 @@ class Codebase
     public function getCasedMethodId($method_id)
     {
         return $this->methods->getCasedMethodId($method_id);
+    }
+
+    public function getSymbolInformation(string $symbol) : ?string
+    {
+        try {
+            if (strpos($symbol, '::')) {
+                list($fq_class_name, $symbol_name) = explode('::', $symbol);
+
+                if (strpos($symbol, '$') !== false) {
+                    $storage = $this->properties->getStorage($symbol);
+                    
+                    $symbol_text = ($storage->type ?: 'mixed') . ' ' . $symbol_name;
+                } else {
+                    $declaring_method_id = $this->methods->getDeclaringMethodId($symbol);
+                    $storage = $this->methods->getStorage($declaring_method_id);
+
+                    $symbol_text = $storage->cased_name . '(' . implode(
+                        ', ',
+                        array_map(
+                            function(FunctionLikeParameter $param) : string {
+                                return ($param->type ?: 'mixed') . ' $' . $param->name;
+                            },
+                            $storage->params
+                        )
+                    ) . ') : ' . ($storage->return_type ?: 'mixed');
+                }
+
+                switch ($storage->visibility) {
+                    case ClassLikeChecker::VISIBILITY_PRIVATE:
+                        $visibility_text = 'private';
+                        break;
+                    
+                    case ClassLikeChecker::VISIBILITY_PROTECTED:
+                        $visibility_text = 'protected';
+
+                    default:
+                        $visibility_text = 'public';
+                }
+
+                return $visibility_text . ' ' . $symbol_text;
+            }
+
+            $storage = $this->classlike_storage_provider->get($symbol);
+
+            return ($storage->abstract ? 'abstract ' : '') . 'class ' . $storage->name;
+        } catch (\UnexpectedValueException $e) {
+            error_log($e->getMessage());
+            return null;
+        }
+    }
+
+    public function getSymbolLocation(string $symbol) : ?\Psalm\CodeLocation
+    {
+        try {
+            if (strpos($symbol, '::')) {
+                list($fq_class_name, $symbol_name) = explode('::', $symbol);
+
+                if (strpos($symbol, '$') !== false) {
+                    $storage = $this->properties->getStorage($symbol);
+                    
+                    return $storage->location;
+                }
+                
+                $declaring_method_id = $this->methods->getDeclaringMethodId($symbol);
+                $storage = $this->methods->getStorage($declaring_method_id);
+
+                return $storage->location;
+            }
+
+            $storage = $this->classlike_storage_provider->get($symbol);
+
+            return $storage->location;
+        } catch (\UnexpectedValueException $e) {
+            error_log($e->getMessage());
+            return null;
+        }
     }
 }

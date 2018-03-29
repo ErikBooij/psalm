@@ -202,7 +202,8 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
 
             if ($this->textDocument === null) {
                 $this->textDocument = new TextDocument(
-                    $this
+                    $this,
+                    $this->project_checker->codebase
                 );
             }
 
@@ -216,7 +217,7 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
             // Support "Find all symbols in workspace"
             $serverCapabilities->workspaceSymbolProvider = false;
             // Support "Go to definition"
-            $serverCapabilities->definitionProvider = false;
+            $serverCapabilities->definitionProvider = true;
             // Support "Find all references"
             $serverCapabilities->referencesProvider = false;
             // Support "Hover"
