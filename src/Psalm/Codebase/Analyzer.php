@@ -135,7 +135,7 @@ class Analyzer
                     echo 'Analyzing ' . $file_checker->getFilePath() . "\n";
                 }
 
-                $file_checker->analyze(null);
+            $file_checker->analyze(null);
             };
 
         if ($pool_size > 1 && count($this->files_to_analyze) > $pool_size) {

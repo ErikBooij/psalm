@@ -18,7 +18,7 @@ class FileStorageCacheProvider
 
     const FILE_CACHE_DIRECTORY = 'file_cache';
 
-    public function __construct(Config $config)
+    public function __construct(Config $config, bool $server_mode = false)
     {
         $this->config = $config;
 
@@ -40,7 +40,7 @@ class FileStorageCacheProvider
             $this->modified_timestamps .= ' ' . filemtime($dependent_file_path);
         }
 
-        $this->modified_timestamps .= PSALM_VERSION;
+        $this->modified_timestamps .= PSALM_VERSION . ($server_mode ? 'server' : '');
     }
 
     /**
@@ -70,6 +70,7 @@ class FileStorageCacheProvider
      */
     public function getLatestFromCache($file_path, $file_contents)
     {
+        $file_path = strtolower($file_path);
         $cached_value = $this->loadFromCache($file_path);
 
         if (!$cached_value) {

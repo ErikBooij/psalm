@@ -295,11 +295,11 @@ $config->setComposerClassLoader($first_autoloader);
 
 $file_storage_cache_provider = isset($options['no-cache'])
     ? new Psalm\Provider\NoCache\NoFileStorageCacheProvider()
-    : new Psalm\Provider\FileStorageCacheProvider($config);
+    : new Psalm\Provider\FileStorageCacheProvider($config, array_key_exists('server', $options));
 
 $classlike_storage_cache_provider = isset($options['no-cache'])
     ? new Psalm\Provider\NoCache\NoClassLikeStorageCacheProvider()
-    : new Psalm\Provider\ClassLikeStorageCacheProvider($config);
+    : new Psalm\Provider\ClassLikeStorageCacheProvider($config, array_key_exists('server', $options));
 
 if (isset($options['clear-cache'])) {
     $cache_directory = $config->getCacheDirectory();

@@ -68,11 +68,6 @@ class FileChecker extends SourceChecker implements StatementsSource
     public $project_checker;
 
     /**
-     * @var array<int, PhpParser\Node\Stmt>|null
-     */
-    public $stmts;
-
-    /**
      * @param string  $file_path
      * @param string  $file_name
      */
@@ -85,11 +80,10 @@ class FileChecker extends SourceChecker implements StatementsSource
 
     /**
      * @param  bool $preserve_checkers
-     * @param  bool $preserve_statements
      *
      * @return void
      */
-    public function analyze(Context $file_context = null, $preserve_checkers = false, $preserve_statements = false)
+    public function analyze(Context $file_context = null, $preserve_checkers = false)
     {
         $codebase = $this->project_checker->codebase;
 
@@ -137,21 +131,7 @@ class FileChecker extends SourceChecker implements StatementsSource
             $this->class_checkers_to_analyze = [];
         }
 
-        if ($preserve_statements) {
-            $this->stmts = $stmts;
-        }
-    }
-
-    /**
-     * @return array<int, \PhpParser\Node\Stmt>
-     */
-    public function getStatements()
-    {
-        if ($this->stmts === null) {
-            throw new \UnexpectedValueException('Statements should not be null here');
-        }
-
-        return $this->stmts;
+        $codebase->cacheMapsForFile($this->file_path);
     }
 
     /**

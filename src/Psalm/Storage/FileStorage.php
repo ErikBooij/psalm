@@ -62,6 +62,16 @@ class FileStorage
     public $hash = '';
 
     /**
+     * @var array|null
+     */
+    public $reference_map = null;
+
+    /**
+     * @var array|null
+     */
+    public $type_map = null;
+
+    /**
      * @param string $file_path
      */
     public function __construct($file_path)

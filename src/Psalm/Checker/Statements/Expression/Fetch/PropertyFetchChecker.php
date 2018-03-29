@@ -80,11 +80,14 @@ class PropertyFetchChecker
         if ($var_id && $context->hasVariable($var_id, $statements_checker)) {
             // we don't need to check anything
             $stmt->inferredType = $context->vars_in_scope[$var_id];
-            $stmt->name->inferredType = $stmt->inferredType;
 
             $codebase->analyzer->incrementNonMixedCount($statements_checker->getCheckedFilePath());
 
-            if ($context->collect_references
+            if ($codebase->server_mode) {
+                $codebase->addNodeType($statements_checker->getFilePath(), $stmt->name, $stmt->inferredType);
+            }
+
+            if (($context->collect_references || $codebase->server_mode)
                 && isset($stmt->var->inferredType)
                 && $stmt->var->inferredType->hasObjectType()
                 && $stmt->name instanceof PhpParser\Node\Identifier
@@ -98,10 +101,16 @@ class PropertyFetchChecker
 
                         $property_id = $lhs_type_part->value . '::$' . $stmt->name->name;
 
-                        $codebase->properties->propertyExists(
-                            $property_id,
-                            new CodeLocation($statements_checker->getSource(), $stmt)
-                        );
+                        if ($codebase->server_mode) {
+                            $codebase->addNodeReference($statements_checker->getFilePath(), $stmt->name, $property_id);
+                        }
+
+                        if ($context->collect_references) {
+                            $codebase->properties->propertyExists(
+                                $property_id,
+                                new CodeLocation($statements_checker->getSource(), $stmt)
+                            );
+                        }
                     }
                 }
             }
@@ -161,7 +170,10 @@ class PropertyFetchChecker
             }
 
             $stmt->inferredType = Type::getMixed();
-            $stmt->name->inferredType = $stmt->inferredType;
+
+            if ($codebase->server_mode) {
+                $codebase->addNodeType($statements_checker->getFilePath(), $stmt->name, $stmt->inferredType);
+            }
 
             return null;
         }
@@ -251,6 +263,10 @@ class PropertyFetchChecker
             }
 
             $property_id = $lhs_type_part->value . '::$' . $prop_name;
+
+            if ($codebase->server_mode) {
+                $codebase->addNodeReference($statements_checker->getFilePath(), $stmt->name, $property_id);
+            }
 
             if ($stmt_var_id !== '$this'
                 && $lhs_type_part->value !== $context->self
@@ -420,7 +436,9 @@ class PropertyFetchChecker
             }
         }
 
-        $stmt->name->inferredType = $stmt->inferredType;
+        if ($codebase->server_mode && isset($stmt->inferredType)) {
+            $codebase->addNodeType($statements_checker->getFilePath(), $stmt->name, $stmt->inferredType);
+        }
 
         if ($invalid_fetch_types) {
             $lhs_type_part = $invalid_fetch_types[0];

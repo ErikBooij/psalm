@@ -35,6 +35,9 @@ class VariableFetchChecker
         Type\Union $by_ref_type = null,
         $array_assignment = false
     ) {
+        $project_checker = $statements_checker->getFileChecker()->project_checker;
+        $codebase = $project_checker->codebase;
+
         if ($stmt->name === 'this') {
             if ($statements_checker->isStatic()) {
                 if (IssueBuffer::accepts(
@@ -193,8 +196,6 @@ class VariableFetchChecker
             $first_appearance = $statements_checker->getFirstAppearance($var_name);
 
             if ($first_appearance && !$context->inside_isset && !$context->inside_unset) {
-                $project_checker = $statements_checker->getFileChecker()->project_checker;
-
                 if ($context->is_global) {
                     if ($project_checker->alter_code) {
                         if (!isset($project_checker->getIssuesToFix()['PossiblyUndefinedGlobalVariable'])) {

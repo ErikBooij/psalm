@@ -417,9 +417,11 @@ class StaticCallChecker extends \Psalm\Checker\Statements\Expression\CallChecker
                     }
                 }
             }
-        }
 
-        $stmt->name->inferredType = $stmt->inferredType;
+            if ($codebase->server_mode && $method_id) {
+                $codebase->addNodeReference($statements_checker->getFilePath(), $stmt->name, $method_id);
+            }
+        }
 
         if ($method_id === null) {
             return self::checkMethodArgs(

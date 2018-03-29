@@ -62,4 +62,13 @@ class Position
         $slice = array_slice($lines, 0, $this->line);
         return array_sum(array_map('strlen', $slice)) + count($slice) + $this->character;
     }
+
+    public static function fromOffset(int $offset, string $file_contents): Position
+    {
+        $file_contents = substr($file_contents, 0, $offset);
+        return new self(
+            substr_count("\n", $file_contents),
+            $offset - (int)strrpos($file_contents, "\n", strlen($file_contents))
+        );
+    }
 }

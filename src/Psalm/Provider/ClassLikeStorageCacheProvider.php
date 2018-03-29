@@ -18,7 +18,7 @@ class ClassLikeStorageCacheProvider
 
     const CLASS_CACHE_DIRECTORY = 'class_cache';
 
-    public function __construct(Config $config)
+    public function __construct(Config $config, bool $server_mode = false)
     {
         $this->config = $config;
 
@@ -39,7 +39,7 @@ class ClassLikeStorageCacheProvider
             $this->modified_timestamps .= ' ' . filemtime($dependent_file_path);
         }
 
-        $this->modified_timestamps .= PSALM_VERSION;
+        $this->modified_timestamps .= PSALM_VERSION . ($server_mode ? 'server' : '');;
     }
 
     /**

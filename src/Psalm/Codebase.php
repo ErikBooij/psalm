@@ -126,6 +126,16 @@ class Codebase
     public $server_mode = false;
 
     /**
+     * @var array
+     */
+    private $reference_map = [];
+
+    /**
+     * @var array
+     */
+    private $type_map = [];
+
+    /**
      * @param bool $collect_references
      * @param bool $debug_output
      */
@@ -222,6 +232,8 @@ class Codebase
 
             $this->file_storage_provider->remove($diff_file_path);
             $this->scanner->removeFile($diff_file_path);
+
+            unset($this->type_map[strtolower($diff_file_path)], $this->reference_map[strtolower($diff_file_path)]);
         }
 
         foreach ($referenced_files as $referenced_file_path) {
@@ -238,6 +250,11 @@ class Codebase
 
             $this->file_storage_provider->remove($referenced_file_path);
             $this->scanner->removeFile($referenced_file_path);
+
+            unset(
+                $this->type_map[strtolower($referenced_file_path)],
+                $this->reference_map[strtolower($referenced_file_path)]
+            );
         }
 
         error_log(var_export($referenced_files, true));
@@ -322,9 +339,73 @@ class Codebase
     {
         return $this->statements_provider->getStatementsForFile(
             $file_path,
-            $this->debug_output,
-            $this->server_mode
+            $this->debug_output
         );
+    }
+
+    public function addNodeType(string $file_path, PhpParser\Node $node, string $node_type) : void
+    {
+        $this->type_map[strtolower($file_path)][(int)$node->getAttribute('startFilePos')] = [
+            (int)$node->getAttribute('endFilePos'),
+            $node_type
+        ];
+    }
+
+    public function addNodeReference(string $file_path, PhpParser\Node $node, string $reference) : void
+    {
+        $this->reference_map[strtolower($file_path)][(int)$node->getAttribute('startFilePos')] = [
+            (int)$node->getAttribute('endFilePos'),
+            $reference
+        ];
+    }
+
+    public function cacheMapsForFile(string $file_path)
+    {
+        $file_contents = $this->file_provider->getContents($file_path);
+
+        $cached_value = $this->file_storage_provider->cache->getLatestFromCache($file_path, $file_contents);
+
+        if (!$cached_value) {
+            throw new \UnexpectedValueException('Bad');
+        }
+
+        $file_path_lc = strtolower($file_path);
+
+        ksort($this->reference_map[$file_path_lc]);
+        ksort($this->type_map[$file_path_lc]);
+
+        $cached_value->reference_map = $this->reference_map[$file_path_lc];
+        $cached_value->type_map = $this->type_map[$file_path_lc];
+
+        error_log(var_export($this->reference_map, true));
+
+        $this->file_storage_provider->cache->writeToCache(
+            $cached_value,
+            $file_contents
+        );
+
+        $this->file_storage_provider->remove($file_path);
+
+        $this->file_storage_provider->has($file_path, $file_contents);
+    }
+
+    public function getMapsForFile(\Psalm\Checker\ProjectChecker $project_checker, string $file_path)
+    {
+        $file_contents = $this->file_provider->getContents($file_path);
+
+        $cached_value = $this->file_storage_provider->cache->getLatestFromCache($file_path, $file_contents);
+
+        if (!$cached_value || $cached_value->reference_map === null || $cached_value->type_map === null) {
+            $this->addFilesToAnalyze([$file_path => $file_path]);
+            $this->analyzer->analyzeFiles($project_checker, 1, false);
+            error_log('analysing ' . $file_path);
+        }
+
+        $storage = $this->file_storage_provider->get($file_path);
+
+        error_log(var_export($storage->reference_map, true));
+
+        return [$storage->reference_map, $storage->type_map];
     }
 
     /**

@@ -250,21 +250,23 @@ class LanguageServer extends AdvancedJsonRpc\Dispatcher
         $this->project_checker->codebase->reloadFiles([$file_path]);
     }
 
-    public function analyzeURI(string $uri)
+    public function getMapsForPath(string $file_path)
     {
-        $file_path = \LanguageServer\uriToPath($uri);
+        $relative_path_to_analyze = $this->config->shortenFileName($file_path);
+
+        $codebase = $this->project_checker->codebase;
+
+        return $codebase->getMapsForFile($this->project_checker, $file_path);
+    }
+
+    public function analyzePath(string $file_path)
+    {
         $relative_path_to_analyze = $this->config->shortenFileName($file_path);
 
         $codebase = $this->project_checker->codebase;
 
         $codebase->addFilesToAnalyze([$file_path => $file_path]);
-
-        $filetype_checkers = $codebase->config->getFileTypeCheckers();
-
-        $file_checker = $codebase->analyzer->getFileChecker($this->project_checker, $file_path, $filetype_checkers);
-        $file_checker->analyze(null, false, true);
-
-        return $file_checker;
+        $codebase->analyzer->analyzeFiles($this->project_checker, 1, false);
     }
 
     public function emitIssues(string $uri)

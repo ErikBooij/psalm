@@ -47,7 +47,6 @@ class FileStorageProvider
     public function remove($file_path)
     {
         unset(self::$storage[strtolower($file_path)]);
-        $this->cache->removeCacheForFile(strtolower($file_path));
     }
 
     /**

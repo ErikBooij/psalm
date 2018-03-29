@@ -62,7 +62,7 @@ class TextDocument
     private function getAnalyzedFileChecker(string $uri)
     {
         if (!$this->file_checker || $uri !== $this->current_uri) {
-            $this->file_checker = $this->server->analyzeURI($uri);
+            $this->file_checker = $this->server->analyzePath(\LanguageServer\uriToPath($uri));
             $this->current_uri = $uri;
         }
         
@@ -276,25 +276,42 @@ class TextDocument
             if (false) {
                 yield true;
             }
-            $file_checker = $this->getAnalyzedFileChecker($textDocument->uri);
-            // Find the node under the cursor
-            $node = \Psalm\Provider\StatementsProvider::getNodeAtPosition(
-                $file_checker->getStatements(),
-                $position
-            );
 
-            if ($node === null) {
+            $file_path = \LanguageServer\uriToPath($textDocument->uri);
+
+            $file_contents = file_get_contents($file_path);
+
+            $offset = $position->toOffset($file_contents);
+
+            list($reference_map, $type_map) = $this->server->getMapsForPath($file_path);
+
+            $reference = null;
+            $type = null;
+
+            foreach ($reference_map as $start_pos => list($end_pos, $possible_reference)) {
+                error_log($start_pos . ' ' . $offset . ' ' . $end_pos);
+                if ($offset < $start_pos) {
+                    break;
+                }
+
+                if ($offset > $end_pos + 1) {
+                    continue;
+                }
+
+                $reference = $possible_reference;
+            }
+
+            if ($reference === null) {
                 return new Hover([]);
             }
+            
+            $range = new Range(
+                Position::fromOffset($start_pos, $file_contents),
+                Position::fromOffset($end_pos, $file_contents)
+            );
 
-            error_log((string) $node->inferredType);
-
-            $range = Range::fromNode($node);
-            if (!isset($node->inferredType)) {
-                return new Hover([], $range);
-            }
             $contents = [];
-            $contents[] = new MarkedString('php', "<?php\n" . $node->inferredType);
+            $contents[] = new MarkedString('php', "<?php\n" . $reference);
             
             return new Hover($contents, $range);
         });
