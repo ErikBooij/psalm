@@ -397,7 +397,7 @@ class TextDocument
                             null,
                             null,
                             null,
-                            $method_storage->cased_name . '('
+                            $method_storage->cased_name . '()'
                         );
                     }
 

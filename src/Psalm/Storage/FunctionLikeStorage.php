@@ -124,6 +124,7 @@ class FunctionLikeStorage
             
             case ClassLikeChecker::VISIBILITY_PROTECTED:
                 $visibility_text = 'protected';
+                break;
 
             default:
                 $visibility_text = 'public';

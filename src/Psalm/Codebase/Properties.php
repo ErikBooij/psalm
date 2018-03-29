@@ -129,6 +129,6 @@ class Properties
             return $declaring_class_storage->properties[$declaring_property_name];
         }
 
-        return null;
+        throw new \UnexpectedValueException('Property ' . $property_id . ' should exist');
     }
 }

@@ -423,6 +423,10 @@ class FunctionCallChecker extends \Psalm\Checker\Statements\Expression\CallCheck
             }
         }
 
+        if ($codebase->server_mode) {
+            $codebase->addNodeType($statements_checker->getFilePath(), $stmt, $stmt->inferredType);
+        }
+
         if ($function_storage
             && strpos($function_storage->cased_name, 'assert') === 0
             && $function_storage->assertions

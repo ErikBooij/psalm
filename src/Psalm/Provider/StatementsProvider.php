@@ -106,7 +106,12 @@ class StatementsProvider
         $error_handler = new \PhpParser\ErrorHandler\Collecting();
 
         /** @var array<int, \PhpParser\Node\Stmt> */
-        $stmts = self::$parser->parse($file_contents, $error_handler);
+        try {
+            $stmts = self::$parser->parse($file_contents, $error_handler);
+        } catch (\Exception $e) {
+            error_log($file_contents);
+            throw $e;
+        }
 
         if (!$stmts && $error_handler->hasErrors()) {
             foreach ($error_handler->getErrors() as $error) {
