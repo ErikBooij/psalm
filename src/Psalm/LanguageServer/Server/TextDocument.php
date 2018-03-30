@@ -344,7 +344,6 @@ class TextDocument
      */
     public function completion(TextDocumentIdentifier $textDocument, Position $position): Promise
     {
-        error_log('called');
         return coroutine(function () use ($textDocument, $position) {
             if (false) {
                 yield true;
@@ -357,6 +356,10 @@ class TextDocument
             $offset = $position->toOffset($file_contents);
 
             list($reference_map, $type_map) = $this->server->getMapsForPath($file_path);
+
+            if ($type_map === null) {
+                return [];
+            }
 
             $reference = null;
             $recent_type = null;

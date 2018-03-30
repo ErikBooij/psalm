@@ -104,7 +104,11 @@ class FileChecker extends SourceChecker implements StatementsSource
 
         $this->context->is_global = true;
 
-        $stmts = $codebase->getStatementsForFile($this->file_path);
+        try {
+            $stmts = $codebase->getStatementsForFile($this->file_path);
+        } catch (PhpParser\Error $e) {
+            return;
+        }
 
         $statements_checker = new StatementsChecker($this);
 

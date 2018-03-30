@@ -98,7 +98,7 @@ class StatementsProvider
                 'comments', 'startLine', 'startFilePos', 'endFilePos',
             ];
 
-            $lexer = new PhpParser\Lexer([ 'usedAttributes' => $attributes ]);
+            $lexer = new PhpParser\Lexer\Emulative([ 'usedAttributes' => $attributes ]);
 
             self::$parser = (new PhpParser\ParserFactory())->create(PhpParser\ParserFactory::PREFER_PHP7, $lexer);
         }
@@ -108,7 +108,7 @@ class StatementsProvider
         /** @var array<int, \PhpParser\Node\Stmt> */
         try {
             $stmts = self::$parser->parse($file_contents, $error_handler);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log($file_contents);
             throw $e;
         }

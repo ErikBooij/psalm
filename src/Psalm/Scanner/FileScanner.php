@@ -57,11 +57,15 @@ class FileScanner implements FileSource
             return;
         }
 
-        $stmts = $codebase->statements_provider->getStatementsForFile(
-            $file_storage->file_path,
-            $debug_output
-        );
-
+        try {
+            $stmts = $codebase->statements_provider->getStatementsForFile(
+                $file_storage->file_path,
+                $debug_output
+            );
+        } catch (PhpParser\Error $e) {
+            return;
+        }
+        
         if ($debug_output) {
             if ($this->will_analyze) {
                 echo 'Deep scanning ' . $file_storage->file_path . "\n";
