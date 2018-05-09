@@ -91,7 +91,7 @@ class StatementsProvider
      *
      * @return array<int, \PhpParser\Node\Stmt>
      */
-    private static function parseStatements($file_contents)
+    public static function parseStatements($file_contents)
     {
         if (!self::$parser) {
             $attributes = [

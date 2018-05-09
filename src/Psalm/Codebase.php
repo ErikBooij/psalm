@@ -386,7 +386,7 @@ class Codebase
         if (!$cached_value || $cached_value->reference_map === null || $cached_value->type_map === null) {
             $this->addFilesToAnalyze([$file_path => $file_path]);
             $this->analyzer->analyzeFiles($project_checker, 1, false);
-            error_log('analysing ' . $file_path);
+            error_log('analysing ' . $file_path . ' to get file map');
         }
 
         $storage = $this->file_storage_provider->get($file_path);

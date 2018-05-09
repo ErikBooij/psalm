@@ -384,6 +384,8 @@ class TextDocument
 
             $gap = substr($file_contents, $end_pos + 1, $offset - $end_pos - 1);
 
+            error_log('type is ' . $recent_type . ' at ' . $offset . ' ' . $gap);
+
             $completion_items = [];
 
             if ($gap === '->') {
