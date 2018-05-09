@@ -172,7 +172,7 @@ class Codebase
         $this->analyzer = new Codebase\Analyzer($config, $file_provider, $debug_output);
 
         $this->functions = new Codebase\Functions($this->file_storage_provider, $this->reflection);
-        $this->methods = new Codebase\Methods($this->classlike_storage_provider);
+        $this->methods = new Codebase\Methods($config, $this->classlike_storage_provider);
         $this->properties = new Codebase\Properties($this->classlike_storage_provider);
 
         $this->classlikes = new Codebase\ClassLikes(
@@ -825,7 +825,7 @@ class Codebase
 
                 if (strpos($symbol, '$') !== false) {
                     $storage = $this->properties->getStorage($symbol);
-                    
+
                     return $storage->getInfo() . ' ' . $symbol_name;
                 }
 
@@ -866,10 +866,10 @@ class Codebase
 
                 if (strpos($symbol, '$') !== false) {
                     $storage = $this->properties->getStorage($symbol);
-                    
+
                     return $storage->location;
                 }
-                
+
                 $declaring_method_id = $this->methods->getDeclaringMethodId($symbol);
                 $storage = $this->methods->getStorage($declaring_method_id);
 
@@ -908,7 +908,7 @@ class Codebase
         $this->scanner->scanFiles($this->classlikes);
         $this->populator->populateCodebase();
     }
-    
+
     private function invalidateInformationForFile(string $file_path)
     {
         $this->scanner->removeFile($file_path);
