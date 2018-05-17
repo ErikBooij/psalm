@@ -795,10 +795,10 @@ class TypeAlgebraTest extends TestCase
             ],
             'instanceofNoRedundant' => [
                 '<?php
-                    function logic(Bar $a, ?Bar $b) : void {
-                        if ((!$a instanceof Foo || !$b instanceof Foo)
-                            && (!$a instanceof Foo || !$b instanceof Bar)
-                            && (!$a instanceof Bar || !$b instanceof Foo)
+                    function logic(Foo $a, Foo $b) : void {
+                        if ((!$a instanceof Bat || !$b instanceof Bat)
+                            && (!$a instanceof Bat || !$b instanceof Bar)
+                            && (!$a instanceof Bar || !$b instanceof Bat)
                             && (!$a instanceof Bar || !$b instanceof Bar)
                         ) {
 
